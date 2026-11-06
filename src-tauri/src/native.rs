@@ -156,7 +156,8 @@ mod win {
     fn mouse_input(dx: i32, dy: i32, data: i32, flags: u32) -> INPUT {
         let mut i: INPUT = unsafe { std::mem::zeroed() };
         i.r#type = INPUT_MOUSE;
-        i.Anonymous.mi = MOUSEINPUT { dx, dy, mouseData: data, dwFlags: flags, time: 0, dwExtraInfo: 0 };
+        // колесо мыши может быть отрицательным — в Windows это u32 с тем же набором бит
+        i.Anonymous.mi = MOUSEINPUT { dx, dy, mouseData: data as u32, dwFlags: flags, time: 0, dwExtraInfo: 0 };
         i
     }
 

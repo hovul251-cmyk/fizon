@@ -327,6 +327,10 @@ export function Sidebar() {
             <Icon name="plus" size={15} />
             Группа
           </button>
+          <button type="button" className="node" aria-label="Новый канал" title="Канал — пишешь ты, подписчики читают" onClick={() => setUi({ modal: { kind: 'newChannel' } })}>
+            <Icon name="megaphone" size={15} />
+            Канал
+          </button>
           <button type="button" className={`node ${view === 'home' && homeTab === 'friends' ? 'on' : ''}`} onClick={() => actions.openHome('friends')}>
             <Icon name="users" size={15} />
             Друзья

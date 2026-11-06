@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_APPWRITE_PROJECT_ID?: string;
   readonly VITE_VAPID_PUBLIC_KEY?: string;
   readonly VITE_HOOKS_URL?: string;
+  readonly VITE_WEB_URL?: string;
   readonly VITE_GITHUB_REPO?: string;
   readonly DEV: boolean;
 }

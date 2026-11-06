@@ -1,22 +1,23 @@
-// Уведомления о сообщениях и звонках, пока Fizion открыт или свёрнут (в том числе в трей на Windows).
-// Когда Fizion закрыт совсем, в браузере и на телефоне приходят push-уведомления (см. lib/push.ts).
+// Уведомления о сообщениях и звонках, пока Neon открыт или свёрнут (в том числе в трей на Windows).
+// Когда Neon закрыт совсем, в браузере и на телефоне приходят push-уведомления (см. lib/push.ts).
 
 import { ME } from '../data';
 import { getState } from '../store';
 import type { Message } from '../types';
 import { showWindow } from './desktop';
+import { play } from './sound';
 
 let unread = 0;
 
 function resetUnread() {
   unread = 0;
-  document.title = 'Fizion';
+  document.title = 'Neon';
   (navigator as Navigator & { clearAppBadge?: () => Promise<void> }).clearAppBadge?.().catch(() => undefined);
 }
 
 function bump() {
   unread++;
-  document.title = `(${unread}) Fizion`;
+  document.title = `(${unread}) Neon`;
   (navigator as Navigator & { setAppBadge?: (n: number) => Promise<void> }).setAppBadge?.(unread).catch(() => undefined);
 }
 
@@ -76,14 +77,19 @@ export function notifyMessage(chatKey: string, m: Message, kind: 'dm' | 'group' 
   if (kind === 'room' && !mention) return;
   if (kind === 'group' && mode === 'dm' && !mention) return;
   if (looking(chatKey)) return;
+  play(mention ? 'mention' : 'message');
   bump();
   show(title, previewOf(m), chatKey, open);
 }
 
-/** Входящий звонок: на Windows ещё и поднимаем окно из трея */
+/**
+ * Входящий звонок: уведомление Windows/браузера. Окно само не выпрыгивает —
+ * нажал на уведомление, и Neon откроется (старое поведение — настройка «Поднимать окно при звонке»).
+ */
 export function notifyCall(name: string, video: boolean, where?: string) {
-  if ((getState().settings.notify ?? 'all') === 'off') return;
-  void showWindow();
+  const s = getState().settings;
+  if ((s.notify ?? 'all') === 'off') return;
+  if (s.callPopup) void showWindow();
   if (!document.hidden && document.hasFocus()) return;
-  show(where ? `📞 Звонок в «${where}»` : '📞 Входящий звонок', `${name} ${where ? 'начал звонок' : video ? 'звонит по видео' : 'звонит'}`, 'call', () => undefined, true);
+  show(where ? `📞 Звонок в «${where}»` : '📞 Входящий звонок', `${name} ${where ? 'начал звонок' : video ? 'звонит по видео' : 'звонит'} — нажми, чтобы ответить`, 'call', () => undefined, true);
 }

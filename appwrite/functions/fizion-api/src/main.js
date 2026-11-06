@@ -1,8 +1,8 @@
 // Точка входа функции Appwrite. Тело запроса: { "action": "...", ...параметры }.
 // Кто вызвал — Appwrite передаёт в заголовке x-appwrite-user-id, подделать его клиент не может.
 import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
-import { Client, ID, Permission, Query, Role, TablesDB, Teams, Users } from 'node-appwrite';
-import { createHash, randomBytes } from 'node:crypto';
+import { Account, Client, ID, Permission, Query, Role, TablesDB, Teams, Users } from 'node-appwrite';
+import { createHash, randomBytes, scryptSync } from 'node:crypto';
 import { run } from './actions.js';
 
 export default async ({ req, res, log, error }) => {
@@ -49,7 +49,13 @@ export default async ({ req, res, log, error }) => {
       teams: new Teams(client),
       users: new Users(client),
       sdk: { ID, Query, Permission, Role },
-      crypto: { sha256: (s) => createHash('sha256').update(s).digest('hex'), randomToken: () => randomBytes(24).toString('base64url') },
+      crypto: {
+        sha256: (s) => createHash('sha256').update(s).digest('hex'),
+        randomToken: () => randomBytes(24).toString('base64url'),
+        scrypt: (pw, salt) => scryptSync(pw, salt, 32).toString('hex'),
+      },
+      // клиент без ключа — проверить код из SMS/письма так же, как это сделало бы приложение
+      publicAccount: () => new Account(new Client().setEndpoint(process.env.APPWRITE_FUNCTION_API_ENDPOINT).setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)),
       livekit,
       log: error,
     },

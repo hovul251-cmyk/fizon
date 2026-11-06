@@ -2,6 +2,8 @@
 // На компьютере: значок в трее, закрытие окна сворачивает в трей (чтобы приходили сообщения и звонки),
 // автозапуск вместе с Windows (тихо, сразу в трей), одна копия приложения, автообновление.
 
+mod native;
+
 #[cfg(desktop)]
 use tauri::{
     menu::{Menu, MenuItem},
@@ -24,7 +26,9 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_opener::init());
+        .plugin(tauri_plugin_opener::init())
+        // активность («Играет в …») и удалённое управление в звонке — см. native.rs
+        .invoke_handler(tauri::generate_handler![native::foreground_app, native::list_monitors, native::remote_set, native::remote_input]);
 
     #[cfg(desktop)]
     let builder = builder
@@ -35,16 +39,17 @@ pub fn run() {
             Some(vec!["--hidden"]),
         ))
         .setup(|app| {
+            native::init(app.handle());
             // автообновление включается, только если в tauri.conf.json настроен ключ (npm run updater:setup)
             if app.config().plugins.0.contains_key("updater") {
                 app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
             }
 
-            let open = MenuItem::with_id(app, "open", "Открыть Fizion", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Выйти из Fizion", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Открыть Neon", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Выйти из Neon", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &quit])?;
             let mut tray = TrayIconBuilder::with_id("fizion")
-                .tooltip("Fizion")
+                .tooltip("Neon")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {

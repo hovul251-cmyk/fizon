@@ -1,4 +1,4 @@
-// Fizion Web: приложение открывается быстро и без сети показывает сохранённую оболочку.
+// Neon Web: приложение открывается быстро и без сети показывает сохранённую оболочку.
 // Данные (сообщения, файлы, вход) всегда идут напрямую на сервер и не кэшируются.
 const CACHE = 'fizion-shell-v2';
 
@@ -53,10 +53,10 @@ self.addEventListener('push', (e) => {
   try {
     p = e.data ? e.data.json() : {};
   } catch {
-    p = { title: 'Fizion', body: e.data ? e.data.text() : '' };
+    p = { title: 'Neon', body: e.data ? e.data.text() : '' };
   }
   e.waitUntil(
-    self.registration.showNotification(p.title || 'Fizion', {
+    self.registration.showNotification(p.title || 'Neon', {
       body: p.body || '',
       tag: p.tag || 'fizion',
       renotify: true,
@@ -69,7 +69,7 @@ self.addEventListener('push', (e) => {
   );
 });
 
-// нажали на уведомление: открыть Fizion на нужном чате
+// нажали на уведомление: открыть Neon на нужном чате
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const url = (e.notification.data && e.notification.data.url) || '/';

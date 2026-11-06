@@ -4,6 +4,7 @@ import { Icon } from '../icons';
 import { actions, setUi, useStore } from '../store';
 import type { Group, Message } from '../types';
 import { ChatView } from './ChatView';
+import { ChannelView } from './Channels';
 import { useEncrypted } from './useEncrypted';
 import { Avatar, formatTime, IconButton, Modal, openCard, usePerson } from './common';
 
@@ -26,6 +27,7 @@ export function GroupRow({ group, active }: { group: Group; active: boolean }) {
     <div className={`chat-row ${active ? 'on' : ''}`}>
       <span className="chat-row-av">
         <GroupBadge group={group} />
+        {group.channel && <span className="chan-mark" aria-label="канал"><Icon name="megaphone" size={11} /></span>}
       </span>
       <button type="button" className="leaf chat-row-main" onClick={() => actions.openHome(`g:${group.id}`)}>
         <span className="chat-row-top">
@@ -33,7 +35,7 @@ export function GroupRow({ group, active }: { group: Group; active: boolean }) {
           {last && <span className="muted small">{formatTime(last.ts)}</span>}
         </span>
         <span className="muted small ellipsis">
-          {last ? `${last.authorId === ME ? 'Вы' : author?.name}: ${last.text || 'вложение'}` : `${group.members.length} участников`}
+          {last ? (group.channel ? last.text || 'вложение' : `${last.authorId === ME ? 'Вы' : author?.name}: ${last.text || 'вложение'}`) : group.channel ? `${group.channel.subs} подписчиков` : `${group.members.length} участников`}
         </span>
       </button>
     </div>
@@ -135,6 +137,7 @@ function SavedView({ group }: { group: Group }) {
 
 export function GroupView({ group }: { group: Group }) {
   if (group.saved) return <SavedView group={group} />;
+  if (group.channel) return <ChannelView group={group} />;
   return <GroupChat group={group} />;
 }
 

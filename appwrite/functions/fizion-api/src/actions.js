@@ -3,6 +3,7 @@
 // Зависимости передаются снаружи (ctx), поэтому эту же логику можно проверить без сети.
 
 export const DB = 'fizion';
+import { afterProfileCreated, createMoreActions, PUBLIC_ACTIONS } from './more.js';
 
 export class HttpError extends Error {
   constructor(status, code, message) {
@@ -33,7 +34,7 @@ const parse = (s, fallback) => {
   }
 };
 
-/** Роли Appwrite-команды из прав роли Fizion. Ими проверяется модерация. */
+/** Роли Appwrite-команды из прав роли Neon. Ими проверяется модерация. */
 const teamRolesFor = (perms, isOwner) => {
   const r = ['member'];
   if (isOwner) r.push('owner', 'admin', 'mod');
@@ -129,6 +130,7 @@ export function createActions(ctx) {
   });
 
   return {
+    __helpers: { get, list, create, update, remove },
     /** Первый вход: создать профиль. Делает сервер, чтобы нельзя было занять чужой id. */
     async 'ensure-profile'({ username, displayName, avatarUrl, bannerUrl, data }) {
       const existing = await get('profiles', userId);
@@ -138,11 +140,14 @@ export function createActions(ctx) {
       const taken = await list('profiles', [Query.equal('username', u)]);
       if (taken.length) throw new HttpError(409, 'username_taken', 'Это имя пользователя уже занято');
       const name = clean(displayName, 32) || u;
-      return create('profiles', profileRow({ username: u, displayName: name, avatarUrl, bannerUrl, data }), [
+      const row = await create('profiles', profileRow({ username: u, displayName: name, avatarUrl, bannerUrl, data }), [
         Permission.read(Role.users()),
         Permission.update(Role.user(userId)),
         Permission.delete(Role.user(userId)),
       ], userId);
+      await afterProfileCreated(ctx, { get, list, create, update, remove }, userId);
+      await create('logs', { kind: 'signup', actorId: userId, targetId: userId, text: `Новый пользователь @${u}` }, []).catch(() => undefined);
+      return (await get('profiles', userId)) ?? row;
     },
 
     async 'create-community'({ name, color, rooms = [] }) {
@@ -371,7 +376,7 @@ export function createActions(ctx) {
       }
       if (!ctx.livekit) throw new HttpError(500, 'livekit_missing', 'Голос не настроен на сервере');
       const profile = await get('profiles', userId);
-      const token = await ctx.livekit.token({ identity: userId, name: profile?.displayName ?? 'Fizion', room: roomName, canPublish: canSpeak });
+      const token = await ctx.livekit.token({ identity: userId, name: profile?.displayName ?? 'Neon', room: roomName, canPublish: canSpeak });
       return { token, url: ctx.livekit.url, canSpeak };
     },
 
@@ -679,9 +684,10 @@ export function createActions(ctx) {
 
 /** Выполнить действие по имени. Возвращает { status, body }. */
 export async function run(ctx, action, payload) {
-  if (!ctx.userId) return { status: 401, body: { error: 'Нужно войти', code: 'unauthorized' } };
-  const actions = createActions(ctx);
-  const fn = actions[action];
+  if (!ctx.userId && !PUBLIC_ACTIONS.has(action)) return { status: 401, body: { error: 'Нужно войти', code: 'unauthorized' } };
+  const base = createActions(ctx);
+  const actions = { ...base, ...createMoreActions(ctx, base.__helpers) };
+  const fn = String(action).startsWith('__') ? null : actions[action];
   if (!fn) return { status: 400, body: { error: 'Неизвестное действие', code: 'unknown_action' } };
   try {
     return { status: 200, body: await fn(payload ?? {}) };

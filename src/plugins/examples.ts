@@ -10,7 +10,7 @@ export const EXAMPLES: Example[] = [
     file: 'dice.js',
     code: `// @name Кубик
 // @version 1.0
-// @author Fizion
+// @author Neon
 // @description Команда /roll — бросить кубик. /roll 20 — кубик на 20 граней, /roll 2d6 — два кубика.
 // @permissions commands
 
@@ -30,7 +30,7 @@ fizion.command('roll', 'Бросить кубик: /roll, /roll 20, /roll 2d6', 
     file: 'emotes.js',
     code: `// @name Эмоции
 // @version 1.0
-// @author Fizion
+// @author Neon
 // @description /shrug, /flip, /unflip, /lenny — добавляют смайлик к сообщению.
 // @permissions commands
 
@@ -49,7 +49,7 @@ for (const [name, [title, face]] of Object.entries(faces)) {
     file: 'remind.js',
     code: `// @name Напоминалка
 // @version 1.0
-// @author Fizion
+// @author Neon
 // @description /remind 15 позвонить маме — напомнит через 15 минут (пока приложение открыто).
 // @permissions commands
 
@@ -71,7 +71,7 @@ fizion.command('remind', 'Напомнить: /remind 15 текст', (args) => 
     file: 'stats.js',
     code: `// @name Статистика сообщений
 // @version 1.0
-// @author Fizion
+// @author Neon
 // @description Считает, сколько сообщений пришло сегодня и в каких чатах больше всего. Данные хранятся только у тебя.
 // @permissions messages:read
 
@@ -114,7 +114,7 @@ draw();
     file: 'neon.css',
     code: `/* @name Тема «Неон»
    @version 1.0
-   @author Fizion
+   @author Neon
    @description Тёмно-синий фон, бирюзовый акцент и светящиеся пузыри. */
 
 :root {
@@ -139,7 +139,7 @@ draw();
     file: 'mint.css',
     code: `/* @name Тема «Мята»
    @version 1.0
-   @author Fizion
+   @author Neon
    @description Светлая и спокойная: мятный акцент и белые панели. Работает со светлой темой в настройках. */
 
 :root[data-theme='light'] {

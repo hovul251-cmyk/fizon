@@ -15,6 +15,10 @@ export interface ProfileLink {
 }
 
 export interface Profile {
+  /** Публичный ID, как в Telegram (выдаёт сервер, не меняется) */
+  num?: string;
+  /** Сейчас в приложении (если человек разрешил показывать) */
+  liveApp?: { name: string; since: number } | null;
   /** Мои наборы стикеров (id), синхронизируются между устройствами */
   stickerPacks?: string[];
   displayName: string;
@@ -117,6 +121,8 @@ export interface Group {
   members: string[];
   /** «Избранное» — чат с самим собой */
   saved?: boolean;
+  /** Канал как в Telegram: пишут только владелец и админы, остальные читают */
+  channel?: { handle: string; about: string; subs: number; isPublic: boolean; admins: string[] };
 }
 
 export interface Comment {
@@ -140,9 +146,11 @@ export interface Attachment {
   /** Ключ файла, если он зашифрован (в личных и группах). Хранится только внутри зашифрованного сообщения. */
   key?: { k: string; iv: string };
   /** Стикер: из какого набора (по нему можно открыть и добавить набор себе) */
-  sticker?: { pack: string; id: string; emoji: string; anim?: string };
+  sticker?: { pack: string; id: string; emoji: string; anim?: string; video?: boolean };
   /** Голосовое/видео-сообщение «кружочком» */
   round?: boolean;
+  /** Служебное сообщение программы (показывается по центру) */
+  service?: boolean;
   /** Опрос */
   poll?: { q: string; options: string[]; multi?: boolean; anon?: boolean };
   /** Мини-игра: кубик, монетка, дартс, слоты */
@@ -155,6 +163,8 @@ export interface Sticker {
   url?: string;
   emoji: string;
   anim?: string;
+  /** Видеостикер: короткое видео без звука по кругу */
+  video?: boolean;
 }
 
 export interface StickerPack {
@@ -214,7 +224,7 @@ export interface Settings {
   /** Сообщения строками, как в Discord (по умолчанию), или пузырями, как в Telegram */
   messageStyle?: 'flat' | 'bubbles';
   /** Фон чатов: своя картинка или гифка */
-  chatBg?: { url: string; dim: number; blur: number } | null;
+  chatBg?: ChatBg | null;
   accent: string;
   density: 'cozy' | 'compact';
   fontSize: number;
@@ -225,6 +235,68 @@ export interface Settings {
   storiesSeen?: Record<string, number>;
   /** Уведомления: всё (личные, группы, упоминания), только личные и упоминания, выключены */
   notify?: 'all' | 'dm' | 'off';
+  /** Поднимать окно из трея при входящем звонке (по умолчанию — только уведомление) */
+  callPopup?: boolean;
+  /** Свой фон для отдельных чатов: ключ чата (dm:<id>, g:<id>, id комнаты) → фон */
+  chatBgs?: Record<string, ChatBg>;
+  /** Обои чата ещё и под панелью со списком чатов */
+  panelBg?: boolean;
+  /** Интерфейс, который человек настроил под себя */
+  ui?: UiPrefs;
+  /** Звуки */
+  sounds?: SoundPrefs;
+  /** Микрофон, динамики, камера и обработка звука */
+  audio?: AudioPrefs;
+  /** Показывать друзьям, в каком приложении я сейчас (только на Windows, по согласию) */
+  shareActivity?: boolean;
+}
+
+export interface ChatBg {
+  url: string;
+  dim: number;
+  blur: number;
+}
+
+export interface UiPrefs {
+  /** Список чатов слева или справа */
+  side?: 'left' | 'right';
+  /** Ширина панели со списком чатов, px */
+  panelWidth?: number;
+  /** Скругление углов, px */
+  radius?: number;
+  /** Форма аватарок */
+  avatars?: 'circle' | 'squircle' | 'square';
+  /** Какие разделы спрятать из левой полосы */
+  hide?: string[];
+  /** Порядок разделов в левой полосе */
+  order?: string[];
+  /** Показывать аватарки в сообщениях */
+  hideAvatars?: boolean;
+  /** Время у каждого сообщения */
+  alwaysTime?: boolean;
+  /** Шрифт интерфейса */
+  font?: 'system' | 'inter' | 'rounded' | 'mono';
+  /** Плавающее поле ввода (с отступами, как в Telegram) */
+  floatingComposer?: boolean;
+}
+
+export type SoundEvent = 'message' | 'mention' | 'call' | 'join' | 'leave' | 'mute' | 'unmute' | 'sent';
+
+export interface SoundPrefs {
+  pack?: 'classic' | 'soft' | 'retro' | 'bubble' | 'none';
+  volume?: number;
+  off?: SoundEvent[];
+  /** Свои звуки (до 5 секунд): событие → ссылка на файл */
+  custom?: Partial<Record<SoundEvent, string>>;
+}
+
+export interface AudioPrefs {
+  input?: string;
+  output?: string;
+  camera?: string;
+  noise?: boolean;
+  echo?: boolean;
+  agc?: boolean;
 }
 
 export interface PersistedState {

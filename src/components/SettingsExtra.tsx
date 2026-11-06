@@ -47,7 +47,7 @@ export function NotifySettings() {
             [
               ['all', 'Личные, группы и упоминания меня в сообществах'],
               ['dm', 'Только личные сообщения, звонки и упоминания'],
-              ['off', 'Ничего — открою Fizion сам'],
+              ['off', 'Ничего — открою Neon сам'],
             ] as const
           ).map(([k, l]) => (
             <label key={k} className="radio">
@@ -60,7 +60,7 @@ export function NotifySettings() {
           <div className="list-row big">
             <div className="grow">
               <div className="strong">Разрешить уведомления</div>
-              <div className="muted small">{perm === 'denied' ? 'Уведомления запрещены — разреши их в настройках браузера или Windows' : 'Без разрешения Fizion не сможет показывать уведомления'}</div>
+              <div className="muted small">{perm === 'denied' ? 'Уведомления запрещены — разреши их в настройках браузера или Windows' : 'Без разрешения Neon не сможет показывать уведомления'}</div>
             </div>
             <button type="button" className="btn primary" disabled={perm === 'denied'} onClick={async () => setPerm(await askNotifyPermission())}>
               Разрешить
@@ -73,9 +73,9 @@ export function NotifySettings() {
               <div className="strong">Push на этом устройстве</div>
               <div className="muted small">
                 {pushSupported()
-                  ? 'Уведомления о сообщениях и звонках придут, даже когда Fizion закрыт.'
+                  ? 'Уведомления о сообщениях и звонках придут, даже когда Neon закрыт.'
                   : ONLINE
-                    ? 'Этот браузер не умеет push. На iPhone добавь Fizion на экран «Домой» и открой оттуда.'
+                    ? 'Этот браузер не умеет push. На iPhone добавь Neon на экран «Домой» и открой оттуда.'
                     : 'Работает в онлайн-режиме.'}
               </div>
               {pushMsg && <div className="form-error small">{pushMsg}</div>}
@@ -88,7 +88,7 @@ export function NotifySettings() {
             <div className="list-row big">
               <div className="grow">
                 <div className="strong">Запускать вместе с Windows</div>
-                <div className="muted small">Fizion тихо стартует в трее — сообщения и звонки придут сразу после включения компьютера</div>
+                <div className="muted small">Neon тихо стартует в трее — сообщения и звонки придут сразу после включения компьютера</div>
               </div>
               <Toggle
                 label="Автозапуск"
@@ -102,7 +102,7 @@ export function NotifySettings() {
             <div className="list-row big">
               <div className="grow">
                 <div className="strong">Значок в трее</div>
-                <div className="muted small">Крестик прячет Fizion в трей рядом с часами, чтобы не пропустить звонок. Выйти совсем — правой кнопкой по значку → «Выйти из Fizion».</div>
+                <div className="muted small">Крестик прячет Neon в трей рядом с часами, чтобы не пропустить звонок. Выйти совсем — правой кнопкой по значку → «Выйти из Neon».</div>
               </div>
             </div>
           </>
@@ -140,7 +140,7 @@ export function PrivacySettings() {
       <div className="ed-col narrow">
         <p className="muted">
           Личные сообщения, группы, файлы, голосовые и звонки шифруются прямо на устройстве. Прочитать их могут только участники переписки — ни сервер, ни администратор
-          Fizion. Ключ создаётся сам и нигде не показывается, поэтому его невозможно подсмотреть или потерять: на новый компьютер или телефон он переносится сам с
+          Neon. Ключ создаётся сам и нигде не показывается, поэтому его невозможно подсмотреть или потерять: на новый компьютер или телефон он переносится сам с
           твоих других устройств.
         </p>
         {!ONLINE && <p className="note">Шифрование работает в онлайн-режиме.</p>}
@@ -154,7 +154,7 @@ export function PrivacySettings() {
           <div className="e2e-wait">
             <b>⏳ Переношу ключ с другого устройства</b>
             <span className="muted small">
-              Открой Fizion на компьютере или телефоне, где ты уже входил, — ключ перенесётся сам за пару секунд, и сообщения откроются. Если старого устройства
+              Открой Neon на компьютере или телефоне, где ты уже входил, — ключ перенесётся сам за пару секунд, и сообщения откроются. Если старого устройства
               больше нет — нажми «Создать новый ключ» ниже.
             </span>
           </div>

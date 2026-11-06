@@ -11,7 +11,8 @@ import { Modal } from './common';
 const useStickers = () => useSyncExternalStore(st.onStickers, st.stickersVersion);
 
 /** Сам стикер: картинка или анимированный эмодзи */
-export function StickerImage({ s, size = 140 }: { s: Pick<Sticker, 'url' | 'emoji' | 'anim'>; size?: number }) {
+export function StickerImage({ s, size = 140 }: { s: Pick<Sticker, 'url' | 'emoji' | 'anim' | 'video'>; size?: number }) {
+  if (s.url && s.video) return <video className="sticker-img" src={s.url} style={{ width: size, height: size }} autoPlay loop muted playsInline aria-label={s.emoji} />;
   if (s.url) return <img className="sticker-img" src={s.url} alt={s.emoji} style={{ width: size, height: size }} draggable={false} loading="lazy" />;
   return (
     <span className={`sticker-emoji anim-${s.anim ?? 'bounce'}`} style={{ fontSize: size * 0.72, width: size, height: size }} role="img" aria-label={s.emoji}>
@@ -27,7 +28,7 @@ export function StickerMessage({ a }: { a: Attachment }) {
   return (
     <>
       <button type="button" className="sticker-msg-btn" aria-label={`Стикер ${a.sticker.emoji}`} onClick={() => setOpen(true)}>
-        <StickerImage s={{ url: a.url, emoji: a.sticker.emoji, anim: a.sticker.anim }} />
+        <StickerImage s={{ url: a.url, emoji: a.sticker.emoji, anim: a.sticker.anim, video: a.sticker.video }} />
       </button>
       {open && <PackModal packId={a.sticker.pack} onClose={() => setOpen(false)} />}
     </>
@@ -38,8 +39,8 @@ const stickerAttachment = (pack: StickerPack, s: Sticker): Attachment => ({
   name: 'Стикер',
   size: '',
   url: s.url,
-  type: s.url ? 'image/webp' : undefined,
-  sticker: { pack: pack.id, id: s.id, emoji: s.emoji, anim: s.anim },
+  type: s.url ? (s.video ? 'video/webm' : 'image/webp') : undefined,
+  sticker: { pack: pack.id, id: s.id, emoji: s.emoji, anim: s.anim, ...(s.video ? { video: true } : {}) },
 });
 
 /** Панель стикеров над полем ввода */
@@ -111,7 +112,7 @@ export function PackModal({ packId, onClose }: { packId: string; onClose: () => 
     <Modal onClose={onClose} width={460} label="Набор стикеров" className="composer-modal">
       <div className="modal-head">
         <h2>{pack === null ? 'Набор удалён' : (pack?.name ?? 'Загружаю…')}</h2>
-        {pack && <p className="muted small">{pack.builtin ? 'Встроенный набор Fizion' : `${pack.stickers.length} стикеров${pack.authorId === ME ? ' · твой набор' : ''}`}</p>}
+        {pack && <p className="muted small">{pack.builtin ? 'Встроенный набор Neon' : `${pack.stickers.length} стикеров${pack.authorId === ME ? ' · твой набор' : ''}`}</p>}
       </div>
       {pack && (
         <div className="sticker-grid big">
@@ -131,6 +132,27 @@ export function PackModal({ packId, onClose }: { packId: string; onClose: () => 
         <button type="button" className="btn ghost" onClick={onClose}>
           Закрыть
         </button>
+        {pack && !pack.builtin && pack.authorId !== ME && (
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            title="Своя копия: можно переименовать, добавлять и убирать стикеры"
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const p = await st.copyPack(pack);
+                setUi({ toast: { text: `Копия «${p.name}» — теперь это твой набор`, id: Date.now() } });
+                onClose();
+              } catch (e) {
+                setUi({ toast: { text: (e as Error).message, id: Date.now() } });
+              }
+              setBusy(false);
+            }}
+          >
+            Скопировать себе
+          </button>
+        )}
         {pack && !pack.builtin && (
           <button
             type="button"
@@ -164,7 +186,7 @@ export function PackEditor({ onClose, onCreated }: { onClose: () => void; onCrea
 
   const add = (files: FileList | null) => {
     if (!files) return;
-    const imgs = [...files].filter((f) => f.type.startsWith('image/'));
+    const imgs = [...files].filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/'));
     setItems((l) => [...l, ...imgs.map((file, i) => ({ file, emoji: QUICK[(l.length + i) % QUICK.length] }))].slice(0, 60));
     setError('');
   };
@@ -187,7 +209,7 @@ export function PackEditor({ onClose, onCreated }: { onClose: () => void; onCrea
     <Modal onClose={() => busy === null && onClose()} width={520} label="Свой набор стикеров" className="composer-modal">
       <div className="modal-head">
         <h2>Свой набор стикеров</h2>
-        <p className="muted small">Картинки (PNG, JPG, WebP) и гифки — до 60 штук. Лучше квадратные и с прозрачным фоном. Каждому стикеру — эмодзи, по которому его узнают.</p>
+        <p className="muted small">Картинки (PNG, JPG, WebP), гифки и короткие видео до 3 секунд — до 60 штук. Лучше квадратные и с прозрачным фоном. Каждому стикеру — эмодзи, по которому его узнают.</p>
       </div>
       <input className="input" aria-label="Название набора" placeholder="Название, например «Котики DIADOn»" maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />
       <div
@@ -200,7 +222,7 @@ export function PackEditor({ onClose, onCreated }: { onClose: () => void; onCrea
       >
         {items.map((it, i) => (
           <div key={i} className="pack-item">
-            <img src={previews[i]} alt="" />
+            {it.file.type.startsWith('video/') ? <video src={previews[i]} autoPlay loop muted playsInline /> : <img src={previews[i]} alt="" />}
             <select aria-label="Эмодзи стикера" value={it.emoji} onChange={(e) => setItems((l) => l.map((x, j) => (j === i ? { ...x, emoji: e.target.value } : x)))}>
               {QUICK.map((q) => (
                 <option key={q}>{q}</option>
@@ -214,7 +236,7 @@ export function PackEditor({ onClose, onCreated }: { onClose: () => void; onCrea
         <label className="pack-add">
           <Icon name="plus" size={22} />
           <span className="small">Добавить</span>
-          <input type="file" accept="image/*" multiple hidden aria-label="Картинки для стикеров" onChange={(e) => (add(e.target.files), (e.target.value = ''))} />
+          <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" multiple hidden aria-label="Картинки для стикеров" onChange={(e) => (add(e.target.files), (e.target.value = ''))} />
         </label>
       </div>
       {error && <p className="form-error">{error}</p>}

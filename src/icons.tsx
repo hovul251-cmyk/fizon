@@ -261,6 +261,64 @@ const paths = {
       <path d="M10.5 8.2 7.3 14.8M13.5 8.2l3.2 6.6M8.5 17h7" />
     </>
   ),
+  arrowLeft: <path d="M19 12H5M11 18l-6-6 6-6" />,
+  gift: (
+    <>
+      <rect x="3" y="8" width="18" height="4" rx="1" />
+      <path d="M12 8v13M19 12v9H5v-9M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5" />
+    </>
+  ),
+  layout: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18M9 9h12" />
+    </>
+  ),
+  coin: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.5 0-2.5.8-2.5 2s1 1.6 2.5 2 2.5.8 2.5 2-1 2-2.5 2c-1 0-2-.5-2.5-1.5M12 6.5V8M12 16v1.5" />
+    </>
+  ),
+  monitor: (
+    <>
+      <rect x="2" y="4" width="20" height="13" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+    </>
+  ),
+  mouse: (
+    <>
+      <rect x="6" y="3" width="12" height="18" rx="6" />
+      <path d="M12 7v4" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  key: (
+    <>
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2" />
+    </>
+  ),
+  megaphone: <path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15 8.5a5 5 0 0 1 0 7M18 5.5a9 9 0 0 1 0 13" />,
+  ban: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m5.6 5.6 12.8 12.8" />
+    </>
+  ),
+  snow: <path d="M12 2v20M4.9 4.9l14.2 14.2M2 12h20M4.9 19.1 19.1 4.9M9 4l3 2 3-2M9 20l3-2 3 2M4 9l2 3-2 3M20 9l-2 3 2 3" />,
+  devices: (
+    <>
+      <rect x="2" y="5" width="13" height="10" rx="1.5" />
+      <rect x="17" y="8" width="5" height="11" rx="1" />
+      <path d="M5 19h8" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof paths;

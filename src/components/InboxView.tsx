@@ -122,7 +122,7 @@ function NotifyCard() {
       <Icon name="bell" size={20} />
       <span className="grow">
         <b>Включи уведомления</b>
-        <span className="muted small">Чтобы не пропустить личные сообщения, упоминания и звонки, даже когда Fizion свёрнут</span>
+        <span className="muted small">Чтобы не пропустить личные сообщения, упоминания и звонки, даже когда Neon свёрнут</span>
       </span>
       <button
         type="button"

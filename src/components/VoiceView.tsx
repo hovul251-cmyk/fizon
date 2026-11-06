@@ -1,3 +1,4 @@
+import { RemoteRequestButton } from './Remote';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import * as social from '../online/social';
 import { ME } from '../data';
@@ -180,6 +181,7 @@ export function VoiceView({ server, channel }: { server: Server; channel: Channe
                 <Icon name="screen" />
               </button>
             )}
+            <RemoteRequestButton size={48} />
             <button type="button" className="round-btn hang" aria-label="Отключиться" onClick={() => void actions.leaveVoice()}>
               <Icon name="hangup" />
             </button>

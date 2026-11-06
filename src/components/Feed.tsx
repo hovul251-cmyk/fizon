@@ -168,7 +168,7 @@ export function FeedView() {
     <main className="feed">
       <aside className="feed-side">
         <h1>Лента</h1>
-        <p className="muted">Короткие вертикальные видео от всех в Fizion. Новые — сверху.</p>
+        <p className="muted">Короткие вертикальные видео от всех в Neon. Новые — сверху.</p>
         <div className="seg feed-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={tab === 'all'} className={tab === 'all' ? 'on' : ''} onClick={() => setUi({ feedTab: 'all' })}>
             Все
@@ -201,7 +201,7 @@ export function FeedView() {
               <Icon name="film" size={40} />
             </div>
             <h2>{tab === 'friends' ? 'Друзья пока ничего не выложили' : 'В ленте пока пусто'}</h2>
-            <p className="muted">Выложи первое видео — его увидят все в Fizion</p>
+            <p className="muted">Выложи первое видео — его увидят все в Neon</p>
             <button type="button" className="btn primary" onClick={() => setUi({ modal: { kind: 'reelComposer' } })}>
               Выложить видео
             </button>
@@ -256,7 +256,7 @@ export function ReelComposer() {
     <Modal onClose={close} width={440} label="Выложить видео" className="composer-modal">
       <div className="modal-head">
         <h2>Видео в ленту</h2>
-        <p className="muted small">Вертикальное, до 3 минут и 50 МБ. Его увидят все в Fizion.</p>
+        <p className="muted small">Вертикальное, до 3 минут и 50 МБ. Его увидят все в Neon.</p>
       </div>
       <MediaPicker accept="video/*" file={file} onFile={(f) => void pick(f)} hint="mp4, webm или mov" />
       <textarea className="input" aria-label="Описание видео" placeholder="Описание, #теги" maxLength={500} rows={2} value={caption} onChange={(e) => setCaption(e.target.value)} />

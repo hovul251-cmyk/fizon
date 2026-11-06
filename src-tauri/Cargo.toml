@@ -1,6 +1,6 @@
 [package]
 name = "fizion"
-version = "0.10.0"
+version = "0.11.0"
 description = "Fizion — мессенджер для сообществ"
 edition = "2021"
 
@@ -18,12 +18,17 @@ tauri-plugin-process = "2"
 # открыть ссылку в браузере (на Android — скачать новую версию APK)
 tauri-plugin-opener = "2"
 serde_json = "1.0.154"
+serde = { version = "1", features = ["derive"] }
 
 # только для компьютера: трей, автозапуск, одно окно, автообновление
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
+
+# Windows: какое приложение открыто и удалённое управление (мышь/клавиатура) в звонке
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
 
 # Маленький и быстрый .exe в релизе
 [profile.release]

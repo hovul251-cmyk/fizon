@@ -1,20 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../icons';
 import { ONLINE } from '../lib/appwrite';
-import * as remote from '../online/remote';
+import * as auth from '../online/auth';
 import * as sync from '../online/sync';
 import { actions, setUi, useStore } from '../store';
+import { Mascot } from './Mascot';
 import { Avatar, colors, nameStyleOf, personFromProfile } from './common';
-
-type Mode = 'code' | 'password';
-type Step = 'form' | 'code' | 'new-password';
 
 function Hero() {
   return (
     <section className="login-hero">
       <div className="login-brand">
-        <div className="logo">F</div>
-        <span>Fizion</span>
+        <Mascot size={44} mood="still" badge />
+        <span>Neon</span>
       </div>
       <div>
         <h1>
@@ -26,10 +24,10 @@ function Hero() {
       </div>
       <ul className="hero-points">
         <li>
-          <Icon name="mail" size={18} /> Вход по коду из письма — без паролей
+          <Icon name="phone" size={18} /> Вход по номеру телефона, номер скрыт от всех
         </li>
         <li>
-          <Icon name="lock" size={18} /> Доступ к сообщениям проверяет сервер
+          <Icon name="key" size={18} /> Облачный пароль и список устройств — как в Telegram
         </li>
         <li>
           <Icon name="star" size={18} /> Всё оформление профиля — бесплатно
@@ -40,7 +38,7 @@ function Hero() {
 }
 
 /** Поле для кода из письма: только цифры, крупно, с автозаполнением из почты. */
-function CodeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function CodeInput({ value, onChange, label = 'Код' }: { value: string; onChange: (v: string) => void; label?: string }) {
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => ref.current?.focus(), []);
   return (
@@ -49,7 +47,7 @@ function CodeInput({ value, onChange }: { value: string; onChange: (v: string) =
       className="input code-input"
       inputMode="numeric"
       autoComplete="one-time-code"
-      aria-label="Код из письма"
+      aria-label={label}
       placeholder="000000"
       maxLength={10}
       value={value}
@@ -58,15 +56,16 @@ function CodeInput({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
+type Step = 'phone' | 'code' | 'password' | 'reset' | 'email';
+
+/** Вход как в Telegram: номер → код из SMS → (облачный пароль, если включён). Почта — только для старых аккаунтов. */
 export function Login() {
-  const [mode, setMode] = useState<Mode>('code');
-  const [register, setRegister] = useState(false);
-  const [step, setStep] = useState<Step>('form');
-  const [codeType, setCodeType] = useState<remote.CodeType>('email');
-  const [name, setName] = useState('');
+  const [step, setStep] = useState<Step>('phone');
+  const [phone, setPhone] = useState('+');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
+  const [resetTo, setResetTo] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -90,187 +89,201 @@ export function Login() {
       setBusy(false);
     }
   };
-
-  const toCode = (type: remote.CodeType) => {
-    setCodeType(type);
-    setCode('');
-    setStep('code');
-    setCooldown(60);
+  const after = async (next: 'done' | 'password' | undefined) => {
+    if (next === 'password') {
+      setPassword('');
+      setStep('password');
+      return;
+    }
+    await sync.start();
   };
-
-  const submitForm = (e: React.FormEvent) => {
-    e.preventDefault();
-    void run(async () => {
-      if (mode === 'code') {
-        const err = await remote.sendLoginCode(email);
-        return err ? setError(err) : toCode('email');
-      }
-      if (register) {
-        const r = await remote.signUp(email, password, name.trim() || email.split('@')[0]);
-        if (r.error) return setError(r.error);
-        if (r.confirm) return toCode('signup');
-        await sync.start();
-        return;
-      }
-      const r = await remote.signIn(email, password);
-      if (r.error) return setError(r.error);
-      if (r.needsConfirm) return toCode('signup');
-      await sync.start();
-    });
-  };
-
-  const submitCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    void run(async () => {
-      const err = await remote.verifyCode(code, codeType);
+  const sendCode = () =>
+    run(async () => {
+      const err = await auth.sendPhoneCode(phone);
       if (err) return setError(err);
-      if (codeType === 'recovery') {
-        setPassword('');
-        return setStep('new-password');
-      }
-      await sync.start();
-    });
-  };
-
-  const forgot = () =>
-    void run(async () => {
-      if (!email.trim()) return setError('Сначала введи свою почту');
-      const err = await remote.sendResetCode(email);
-      return err ? setError(err) : toCode('recovery');
-    });
-
-  const resend = () =>
-    void run(async () => {
-      const err = await remote.resendCode(email, codeType);
-      if (err) return setError(err);
+      setCode('');
+      setStep('code');
       setCooldown(60);
     });
-
-  const titles: Record<remote.CodeType, string> = {
-    email: 'Код для входа',
-    signup: 'Подтверди почту',
-    recovery: 'Сброс пароля',
-  };
 
   return (
     <div className="login">
       <Hero />
       <section className="login-form-wrap">
-        {step === 'form' && (
-          <form className="login-form" onSubmit={submitForm}>
+        {step === 'phone' && (
+          <form
+            className="login-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void sendCode();
+            }}
+          >
             <div>
-              <h2>{mode === 'password' && register ? 'Создай аккаунт' : 'Вход в Fizion'}</h2>
-              <p className="muted">
-                {mode === 'code' ? 'Пришлём на почту код. Аккаунта нет — создадим автоматически.' : register ? 'После регистрации придёт код подтверждения' : 'Войди почтой и паролем'}
-              </p>
+              <h2>Вход в Neon</h2>
+              <p className="muted">Введи номер телефона — пришлём код по SMS. Аккаунта нет — создадим.</p>
             </div>
-            <div className="seg">
-              <button type="button" className={mode === 'code' ? 'on' : ''} onClick={() => setMode('code')}>
-                Код на почту
-              </button>
-              <button type="button" className={mode === 'password' ? 'on' : ''} onClick={() => setMode('password')}>
-                Пароль
-              </button>
-            </div>
-            {mode === 'password' && register && (
-              <label className="field">
-                ИМЯ В FIZION
-                <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={32} placeholder="Как тебя будут видеть" />
-              </label>
-            )}
             <label className="field">
-              ПОЧТА
-              <input className="input" type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@mail.com" autoComplete="email" />
+              НОМЕР ТЕЛЕФОНА
+              <input className="input phone-input" type="tel" required autoFocus value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s()-]/g, ''))} placeholder="+375 29 123 45 67" autoComplete="tel" />
             </label>
-            {mode === 'password' && (
-              <label className="field">
-                ПАРОЛЬ
-                <input
-                  className="input"
-                  type="password"
-                  required
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={register ? 'Не меньше 8 символов' : '••••••••'}
-                  autoComplete={register ? 'new-password' : 'current-password'}
-                />
-              </label>
-            )}
+            <span className="muted small">Номер никто не увидит — он скрыт от всех.</span>
             {error && <p className="form-error">{error}</p>}
-            <button type="submit" className="btn primary big" disabled={busy}>
-              {busy ? 'Секунду…' : mode === 'code' ? 'Получить код' : register ? 'Зарегистрироваться' : 'Войти'}
+            <button type="submit" className="btn primary big" disabled={busy || phone.replace(/\D/g, '').length < 8}>
+              {busy ? 'Отправляю…' : 'Получить код'}
             </button>
-            {mode === 'password' && (
-              <div className="login-links">
-                <button type="button" className="link" onClick={() => setRegister((v) => !v)}>
-                  {register ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Регистрация'}
-                </button>
-                {!register && (
-                  <button type="button" className="link" onClick={forgot}>
-                    Забыл пароль
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="login-links">
+              <button type="button" className="link" onClick={() => { setStep('email'); setError(''); }}>
+                У меня старый аккаунт по почте
+              </button>
+            </div>
           </form>
         )}
 
         {step === 'code' && (
-          <form className="login-form" onSubmit={submitCode}>
+          <form
+            className="login-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(async () => {
+                const r = await auth.verifyPhoneCode(code);
+                if (r.error) return setError(r.error);
+                await after(r.next);
+              });
+            }}
+          >
             <div className="mail-icon">
-              <Icon name="mail" size={28} />
+              <Icon name="phone" size={28} />
             </div>
             <div>
-              <h2>{titles[codeType]}</h2>
+              <h2>Код из SMS</h2>
               <p className="muted">
-                Отправили код на <b className="text">{email.trim()}</b>. Письмо может прийти через минуту — проверь «Спам».
+                Отправили код на <b className="text">{auth.normPhone(phone)}</b>. SMS может прийти через минуту.
               </p>
             </div>
-            <CodeInput value={code} onChange={setCode} />
+            <CodeInput value={code} onChange={setCode} label="Код из SMS" />
             {error && <p className="form-error">{error}</p>}
             <button type="submit" className="btn primary big" disabled={busy || code.length < 6}>
-              {busy ? 'Проверяю…' : 'Подтвердить'}
+              {busy ? 'Проверяю…' : 'Войти'}
             </button>
             <div className="login-links">
-              <button type="button" className="link" onClick={() => { setStep('form'); setError(''); }}>
-                Другая почта
+              <button type="button" className="link" onClick={() => { setStep('phone'); setError(''); }}>
+                Другой номер
               </button>
-              <button type="button" className="link" disabled={cooldown > 0 || busy} onClick={resend}>
+              <button type="button" className="link" disabled={cooldown > 0 || busy} onClick={() => void sendCode()}>
                 {cooldown > 0 ? `Отправить ещё раз через ${cooldown} с` : 'Отправить код ещё раз'}
               </button>
             </div>
           </form>
         )}
 
-        {step === 'new-password' && (
+        {step === 'password' && (
           <form
             className="login-form"
             onSubmit={(e) => {
               e.preventDefault();
               void run(async () => {
-                const r = await remote.setNewPassword(email, password);
-                if (r.badCode) {
-                  setStep('code');
-                  setCode('');
-                }
-                if (r.error) return setError(r.error);
+                const err = await auth.checkCloudPassword(password);
+                if (err) return setError(err);
                 await sync.start();
               });
             }}
           >
+            <div className="mail-icon">
+              <Icon name="key" size={28} />
+            </div>
             <div>
-              <h2>Новый пароль</h2>
-              <p className="muted">Придумай новый пароль — сохраним его вместе с кодом из письма и сразу войдём.</p>
+              <h2>Облачный пароль</h2>
+              <p className="muted">На аккаунте включён облачный пароль. Введи его, чтобы войти на этом устройстве.</p>
+            </div>
+            <input className="input" type="password" autoFocus required aria-label="Облачный пароль" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={auth.passwordHint() ? `Подсказка: ${auth.passwordHint()}` : 'Пароль'} autoComplete="current-password" />
+            {error && <p className="form-error">{error}</p>}
+            <button type="submit" className="btn primary big" disabled={busy || !password}>
+              {busy ? 'Проверяю…' : 'Войти'}
+            </button>
+            {auth.canResetPassword() && (
+              <div className="login-links">
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() =>
+                    void run(async () => {
+                      const r = await auth.startCloudReset();
+                      if (r.error) return setError(r.error);
+                      setResetTo(r.email ?? '');
+                      setCode('');
+                      setStep('reset');
+                    })
+                  }
+                >
+                  Забыл пароль — сбросить через почту
+                </button>
+              </div>
+            )}
+          </form>
+        )}
+
+        {step === 'reset' && (
+          <form
+            className="login-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(async () => {
+                const err = await auth.finishCloudReset(code);
+                if (err) return setError(err);
+                await sync.start();
+              });
+            }}
+          >
+            <div className="mail-icon">
+              <Icon name="mail" size={28} />
+            </div>
+            <div>
+              <h2>Сброс облачного пароля</h2>
+              <p className="muted">
+                Отправили код на <b className="text">{resetTo}</b>. После входа облачный пароль выключится — потом можно задать новый.
+              </p>
+            </div>
+            <CodeInput value={code} onChange={setCode} label="Код из письма" />
+            {error && <p className="form-error">{error}</p>}
+            <button type="submit" className="btn primary big" disabled={busy || code.length < 6}>
+              {busy ? 'Проверяю…' : 'Сбросить и войти'}
+            </button>
+          </form>
+        )}
+
+        {step === 'email' && (
+          <form
+            className="login-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(async () => {
+                const r = await auth.emailLogin(email, password);
+                if (r.error) return setError(r.error);
+                await after(r.next);
+              });
+            }}
+          >
+            <div>
+              <h2>Старый аккаунт</h2>
+              <p className="muted">Войди почтой и паролем, а потом привяжи номер в Настройки → Конфиденциальность — дальше будешь входить по номеру.</p>
             </div>
             <label className="field">
-              НОВЫЙ ПАРОЛЬ
-              <input className="input" type="password" required minLength={8} autoFocus value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Не меньше 8 символов" autoComplete="new-password" />
+              ПОЧТА
+              <input className="input" type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@mail.com" autoComplete="email" />
+            </label>
+            <label className="field">
+              ПАРОЛЬ
+              <input className="input" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password" />
             </label>
             {error && <p className="form-error">{error}</p>}
             <button type="submit" className="btn primary big" disabled={busy}>
-              {busy ? 'Сохраняю…' : 'Сохранить и войти'}
+              {busy ? 'Секунду…' : 'Войти'}
             </button>
+            <div className="login-links">
+              <button type="button" className="link" onClick={() => { setStep('phone'); setError(''); }}>
+                Войти по номеру
+              </button>
+            </div>
           </form>
         )}
       </section>
@@ -278,7 +291,6 @@ export function Login() {
   );
 }
 
-/** Без настроек Appwrite: локальный профиль на этом компьютере. */
 function OfflineLogin() {
   const profile = useStore((s) => s.profile);
   const [name, setName] = useState('');
@@ -296,7 +308,7 @@ function OfflineLogin() {
         >
           <div>
             <h2>Офлайн-режим</h2>
-            <p className="muted">Онлайн не настроен: нет данных Appwrite в файле .env. Можно попробовать Fizion на этом компьютере — без других людей, почты и голоса.</p>
+            <p className="muted">Онлайн не настроен: нет данных Appwrite в файле .env. Можно попробовать Neon на этом компьютере — без других людей, почты и голоса.</p>
           </div>
           <label className="field">
             КАК ТЕБЯ НАЗЫВАТЬ
@@ -356,10 +368,10 @@ export function Onboarding() {
           </div>
           <label className="field">
             ИМЯ
-            <input className="input" required autoFocus maxLength={32} value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="input" required autoFocus maxLength={32} value={name} onChange={(e) => setName(e.target.value)} placeholder="Как тебя видят другие" />
           </label>
           <label className="field">
-            ИМЯ ПОЛЬЗОВАТЕЛЯ — ПО НЕМУ ТЕБЯ ДОБАВЯТ В ДРУЗЬЯ
+            ЛОГИН — ПО НЕМУ ТЕБЯ ДОБАВЯТ В ДРУЗЬЯ
             <input
               className="input"
               required

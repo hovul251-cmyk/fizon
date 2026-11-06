@@ -5,7 +5,7 @@ const project = import.meta.env.VITE_APPWRITE_PROJECT_ID as string | undefined;
 
 /**
  * Подключение к Appwrite. Если в .env нет адреса и id проекта,
- * Fizion работает в офлайн-режиме: всё хранится только на этом компьютере.
+ * Neon работает в офлайн-режиме: всё хранится только на этом компьютере.
  */
 const client = endpoint && project ? new Client().setEndpoint(endpoint).setProject(project).setLocale('ru') : null;
 

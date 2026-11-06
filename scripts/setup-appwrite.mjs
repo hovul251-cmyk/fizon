@@ -9,7 +9,7 @@ import { createECDH } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { Client, Functions, ID, Permission, ProjectKeyScopes, Proxy, Query, Role, Runtime, Storage, TablesDB, TablesDBIndexType } from 'node-appwrite';
+import { Client, Functions, ID, Permission, ProjectKeyScopes, Proxy, Query, Role, Runtime, Storage, TablesDB, TablesDBIndexType, Users } from 'node-appwrite';
 import { InputFile } from 'node-appwrite/file';
 import { CLOCK, cleanSecret, normalizeUrl, verifyLivekit } from './check-livekit.mjs';
 
@@ -57,7 +57,8 @@ const D = (key) => ({ key, type: 'd', required: true });
 const users = [Permission.create(Role.users())];
 /** @type {Tbl[]} */
 const tables = [
-  { id: 'profiles', name: 'Профили', columns: [S('username', 32, true), S('displayName', 32, true), S('avatarUrl', 1024), S('bannerUrl', 1024), T('data')], indexes: [['username_u', 'unique', ['username']]] },
+  // num — публичный ID человека, как в Telegram (выдаёт сервер)
+  { id: 'profiles', name: 'Профили', columns: [S('username', 32, true), S('displayName', 32, true), S('avatarUrl', 1024), S('bannerUrl', 1024), T('data'), S('num', 12)], indexes: [['username_u', 'unique', ['username']], ['num', 'key', ['num']]] },
   { id: 'communities', name: 'Сообщества', columns: [S('teamId', 36, true), S('name', 40, true), S('color', 16), S('ownerId', 36, true)], indexes: [] },
   { id: 'rooms', name: 'Комнаты', columns: [S('teamId', 36, true), S('name', 40, true), S('kind', 8, true), S('category', 40), S('topic', 200), I('position'), I('slowmode'), B('stage'), T('speakers')], indexes: [['team', 'key', ['teamId']]] },
   { id: 'roles', name: 'Роли', columns: [S('teamId', 36, true), S('key', 16), S('name', 30, true), S('color', 16), T('perms'), I('position')], indexes: [['team', 'key', ['teamId']]] },
@@ -107,7 +108,13 @@ const tables = [
     columns: [S('dmId', 36, true), S('fromId', 36, true), S('toId', 36, true), S('status', 10, true), B('video')],
     indexes: [['dm', 'key', ['dmId']], ['to', 'key', ['toId']]],
   },
-  { id: 'groups', name: 'Группы', columns: [S('name', 40, true), S('color', 16), S('ownerId', 36, true), S('kind', 16)], indexes: [['owner', 'key', ['ownerId']]] },
+  // kind: '' — группа, 'saved' — Избранное, 'channel' — канал (handle — ссылка @канала)
+  {
+    id: 'groups',
+    name: 'Группы и каналы',
+    columns: [S('name', 40, true), S('color', 16), S('ownerId', 36, true), S('kind', 16), S('handle', 32), S('about', 200), B('isPublic'), I('subs')],
+    indexes: [['owner', 'key', ['ownerId']], ['handle', 'key', ['handle']]],
+  },
   { id: 'bans', name: 'Баны', columns: [S('teamId', 36, true), S('userId', 36, true), S('by', 36), S('reason', 200)], indexes: [['team', 'key', ['teamId']], ['team_user_u', 'unique', ['teamId', 'userId']]] },
   { id: 'mutes', name: 'Муты', columns: [S('teamId', 36, true), S('userId', 36, true), S('by', 36), D('until')], indexes: [['team', 'key', ['teamId']], ['team_user_u', 'unique', ['teamId', 'userId']]] },
   {
@@ -157,6 +164,24 @@ const tables = [
   },
   { id: 'catalogRatings', name: 'Оценки плагинов', perms: users, columns: [S('pluginId', 36, true), S('userId', 36, true), I('stars')], indexes: [['plugin', 'key', ['pluginId']], ['once_u', 'unique', ['pluginId', 'userId']]] },
   { id: 'catalogInstalls', name: 'Установки плагинов', perms: users, columns: [S('pluginId', 36, true), S('userId', 36, true)], indexes: [['plugin', 'key', ['pluginId']], ['once_u', 'unique', ['pluginId', 'userId']]] },
+  // облачный пароль: только сервер (строки без прав — клиенту не видны)
+  {
+    id: 'secure',
+    name: 'Облачные пароли',
+    columns: [S('hash', 128), S('salt', 64), S('hint', 60), S('email', 200), I('failed'), I('lockUntil'), I('allowUntil'), S('ticket', 64), I('ticketUntil')],
+    indexes: [],
+  },
+  // журнал для владельца: входы, баны, подарки, новые люди (видит только сервер → панель владельца)
+  { id: 'logs', name: 'Журнал', columns: [S('kind', 24, true), S('actorId', 36), S('targetId', 36), S('text', 300)], indexes: [['kind', 'key', ['kind']], ['time', 'key', ['$createdAt']]] },
+  // искры: баланс меняет только сервер, человек видит свой
+  { id: 'wallets', name: 'Искры', columns: [I('balance'), I('spent')], indexes: [] },
+  // подарки: видны всем (на профиле), анонимные — без отправителя
+  {
+    id: 'gifts',
+    name: 'Подарки',
+    columns: [S('fromId', 36), S('toId', 36, true), S('giftId', 16, true), S('text', 200), I('price'), I('serial'), S('look', 32), B('converted'), B('hidden')],
+    indexes: [['to', 'key', ['toId']], ['gift', 'key', ['giftId']]],
+  },
   { id: 'friendships', name: 'Друзья', columns: [S('fromId', 36, true), S('toId', 36, true), S('status', 10, true)], indexes: [['from', 'key', ['fromId']], ['to', 'key', ['toId']]] },
 ];
 
@@ -254,7 +279,8 @@ async function setupFunction() {
     functionId: 'fizion-api',
     name: 'Fizion API',
     runtime: Runtime.Node22,
-    execute: [Role.users()],
+    // любой — потому что вход (проверка SMS и облачного пароля) идёт ещё без сессии; остальное функция сама требует входа
+    execute: [Role.any()],
     entrypoint: 'src/main.js',
     commands: 'npm install',
     timeout: 30,
@@ -290,11 +316,11 @@ async function setupEvents() {
     runtime: Runtime.Node22,
     // публичный адрес нужен для входящих вебхуков (ботов); события проверяются внутри функции
     execute: [Role.any()],
-    events: [`tablesdb.${DB}.tables.messages.rows.*.create`, `tablesdb.${DB}.tables.calls.rows.*.create`],
+    events: [`tablesdb.${DB}.tables.messages.rows.*.create`, `tablesdb.${DB}.tables.calls.rows.*.create`, 'users.*.sessions.*.create'],
     entrypoint: 'src/main.js',
     commands: 'npm install',
     timeout: 30,
-    scopes: [ProjectKeyScopes.TeamsRead, ProjectKeyScopes.RowsRead, ProjectKeyScopes.RowsWrite],
+    scopes: [ProjectKeyScopes.UsersRead, ProjectKeyScopes.UsersWrite, ProjectKeyScopes.TeamsRead, ProjectKeyScopes.RowsRead, ProjectKeyScopes.RowsWrite],
   };
   await upsertFunction(fn);
   const vars = (await functions.listVariables({ functionId: fn.functionId })).variables;
@@ -330,9 +356,21 @@ async function findHooksUrl() {
   }
 }
 
+let webUrl = '';
+/** Адрес веб-версии (для ссылок на каналы и приглашений) — появляется после первой выкладки сайта */
+async function findWebUrl() {
+  try {
+    const rules = await proxy.listRules({ queries: [Query.equal('deploymentResourceId', 'fizion-web'), Query.limit(10)] });
+    const domain = rules.rules.map((r) => r.domain)[0];
+    if (domain) webUrl = `https://${domain}`;
+  } catch {
+    /* сайта ещё нет — ссылки будут вида fizion://… и откроются внутри приложения */
+  }
+}
+
 function writeAppEnv() {
   step('Файл .env для приложения');
-  const want = { VITE_APPWRITE_ENDPOINT: ENDPOINT, VITE_APPWRITE_PROJECT_ID: PROJECT, VITE_VAPID_PUBLIC_KEY: vapidPublic, VITE_HOOKS_URL: hooksUrl };
+  const want = { VITE_APPWRITE_ENDPOINT: ENDPOINT, VITE_APPWRITE_PROJECT_ID: PROJECT, VITE_VAPID_PUBLIC_KEY: vapidPublic, VITE_HOOKS_URL: hooksUrl, VITE_WEB_URL: webUrl };
   let text = existsSync('.env') ? readFileSync('.env', 'utf8') : '';
   for (const [k, v] of Object.entries(want)) {
     if (!v) continue;
@@ -343,14 +381,29 @@ function writeAppEnv() {
   ok('записан');
 }
 
+/** Владелец Fizion: OWNER_LOGIN из .env.setup получает метку owner — ему открывается панель владельца */
+async function setupOwner() {
+  step('Владелец Fizion (панель владельца)');
+  const login = String(process.env.OWNER_LOGIN ?? '').trim().replace(/^@/, '').toLowerCase();
+  if (!login) return console.warn('  ! впиши в .env.setup строку OWNER_LOGIN=твой_логин и запусти npm run setup ещё раз — тогда появится панель владельца');
+  const p = (await db.listRows({ databaseId: DB, tableId: 'profiles', queries: [Query.equal('username', login), Query.limit(1)] })).rows[0];
+  if (!p) return console.warn(`  ! человек с логином ${login} не найден — сначала зарегистрируйся в Fizion с этим логином`);
+  const u = new Users(client);
+  const cur = (await u.get({ userId: p.$id })).labels ?? [];
+  if (!cur.includes('owner')) await u.updateLabels({ userId: p.$id, labels: [...new Set([...cur, 'owner'])] });
+  ok(`@${login} — владелец`);
+}
+
 try {
   await setupDatabase();
   await setupStorage();
   await setupFunction();
   await setupEvents();
   await findHooksUrl();
+  await findWebUrl();
+  await setupOwner().catch((e) => console.warn(`  ! не получилось назначить владельца: ${e.message}. У ключа API должны быть права users.read и users.write`));
   writeAppEnv();
-  console.log('\n✔ Готово. Осталось включить почту (SMTP) и платформы — см. README. Затем: npm run app\n');
+  console.log('\n✔ Готово. Вход по номеру: в консоли Appwrite → Auth → Settings должен быть включён Phone. Затем: npm run app\n');
 } catch (e) {
   console.error(`\n✖ ${e.message}\n`);
   if (e?.code === 401) console.error('Проверь APPWRITE_API_KEY и что у ключа есть все права из README.\n');

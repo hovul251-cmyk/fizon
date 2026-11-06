@@ -38,13 +38,13 @@ export function UpdateBanner() {
         <Icon name="upload" size={18} />
       </span>
       <span className="grow update-text">
-        <b>Вышла новая версия Fizion {update.version}</b>
+        <b>Вышла новая версия Neon {update.version}</b>
         <span className="muted small">
           {progress !== null
             ? IS_DESKTOP_APP
-              ? `Загружаю… ${progress}%. Fizion перезапустится сам.`
+              ? `Загружаю… ${progress}%. Neon перезапустится сам.`
               : 'Обновляю…'
-            : error || notes || (IS_DESKTOP_APP ? 'Обновление займёт меньше минуты.' : IS_TAURI ? 'Скачается новый APK — открой его, и Android обновит Fizion.' : 'Страница перезагрузится — ничего не потеряется.')}
+            : error || notes || (IS_DESKTOP_APP ? 'Обновление займёт меньше минуты.' : IS_TAURI ? 'Скачается новый APK — открой его, и Android обновит Neon.' : 'Страница перезагрузится — ничего не потеряется.')}
         </span>
         {progress !== null && IS_DESKTOP_APP && (
           <span className="update-bar">
@@ -78,7 +78,7 @@ export function UpdateSettings() {
   return (
     <div className="list-row big">
       <div className="grow">
-        <div className="strong">Fizion {APP_VERSION}</div>
+        <div className="strong">Neon {APP_VERSION}</div>
         <div className="muted small">
           {!canAutoUpdate()
             ? 'В этой сборке обновления не проверяются (режим разработки или Android-сборка без GitHub).'

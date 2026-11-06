@@ -1,4 +1,4 @@
-// Где запущен Fizion: окно Tauri на Windows или браузер (компьютер или телефон).
+// Где запущен Neon: окно Tauri на Windows или браузер (компьютер или телефон).
 
 /** Приложение для Windows (в браузере этого объекта нет) */
 export const IS_TAURI = typeof window !== 'undefined' && '__TAURI__' in window;

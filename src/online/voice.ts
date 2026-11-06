@@ -6,6 +6,20 @@ import { getState, setUi } from '../store';
 import type { VideoTrackLike } from '../types';
 import { call, errorText, L, toast, trackMe } from './sync';
 import * as social from './social';
+import { play } from '../lib/sound';
+import { onRemoteData, resetRemote } from './remotectl';
+
+/** Микрофон, динамики, камера и обработка звука — из настроек */
+const audioPrefs = () => getState().settings.audio ?? {};
+const captureOpts = () => {
+  const a = audioPrefs();
+  return {
+    echoCancellation: a.echo ?? true,
+    noiseSuppression: a.noise ?? true,
+    autoGainControl: a.agc ?? true,
+    ...(a.input ? { deviceId: a.input } : {}),
+  };
+};
 
 let room: Room | null = null;
 /** Куда подключены: голосовая комната сообщества или звонок в личке */
@@ -31,6 +45,7 @@ function refreshVideos() {
 }
 
 function cleanup() {
+  resetRemote();
   audioEls.forEach((el) => el.remove());
   audioEls.clear();
   room = null;
@@ -67,7 +82,9 @@ export async function connect(to: { roomId?: string; dmId?: string; groupId?: st
   const r = new Room({
     adaptiveStream: true,
     dynacast: true,
-    audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    audioCaptureDefaults: captureOpts(),
+    videoCaptureDefaults: audioPrefs().camera ? { deviceId: audioPrefs().camera } : undefined,
+    audioOutput: audioPrefs().output ? { deviceId: audioPrefs().output } : undefined,
     ...(e2ee ? { e2ee } : {}),
   });
   if (e2ee) await r.setE2EEEnabled(true).catch(() => undefined);
@@ -97,8 +114,13 @@ export async function connect(to: { roomId?: string; dmId?: string; groupId?: st
     .on(RoomEvent.ParticipantDisconnected, () => {
       refreshVideos();
       refreshPeers();
+      play('leave');
     })
-    .on(RoomEvent.ParticipantConnected, refreshPeers)
+    .on(RoomEvent.ParticipantConnected, () => {
+      refreshPeers();
+      play('join');
+    })
+    .on(RoomEvent.DataReceived, (payload: Uint8Array, p?: Participant) => p && onRemoteData(L(p.identity), payload))
     .on(RoomEvent.ParticipantPermissionsChanged, (_prev: unknown, p: Participant) => {
       if (p !== r.localParticipant) return;
       const can = (p as { permissions?: { canPublish?: boolean } }).permissions?.canPublish !== false;
@@ -142,6 +164,7 @@ export async function disconnect() {
 }
 
 export async function setMic(on: boolean) {
+  play(on ? 'unmute' : 'mute');
   try {
     await room?.localParticipant.setMicrophoneEnabled(on);
   } catch (e) {
@@ -175,3 +198,29 @@ export async function setScreen(on: boolean) {
   }
   refreshVideos();
 }
+
+/** Сменить микрофон, динамики или камеру прямо во время звонка */
+export async function switchDevice(kind: 'audioinput' | 'audiooutput' | 'videoinput', deviceId: string) {
+  if (!room) return;
+  try {
+    await room.switchActiveDevice(kind, deviceId);
+  } catch (e) {
+    toast('Не удалось переключить устройство: ' + errorText(e));
+  }
+}
+
+/** Включить/выключить шумодав, эхоподавление, автоусиление — перезапускаем микрофон */
+export async function applyAudioProcessing() {
+  const r = room;
+  if (!r) return;
+  const on = r.localParticipant.isMicrophoneEnabled;
+  if (!on) return;
+  await r.localParticipant.setMicrophoneEnabled(false);
+  await r.localParticipant.setMicrophoneEnabled(true, captureOpts()).catch((e) => toast(errorText(e)));
+}
+
+/** Отправить данные участникам звонка (удалённое управление) */
+export async function sendData(data: Uint8Array, to?: string[], reliable = true) {
+  await room?.localParticipant.publishData(data, { reliable, destinationIdentities: to });
+}
+export const currentRoom = () => room;

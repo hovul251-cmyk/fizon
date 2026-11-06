@@ -16,7 +16,7 @@ const ANIMS = ['bounce', 'wiggle', 'pulse', 'float', 'spin', 'pop'];
 /** Встроенный набор: большие анимированные эмодзи — есть у всех сразу */
 export const BUILTIN: StickerPack = {
   id: 'fizion',
-  name: 'Fizion',
+  name: 'Neon',
   authorId: 'fizion',
   builtin: true,
   stickers: ['😂', '🔥', '❤️', '👍', '😭', '😎', '🤯', '🥳', '😡', '🤔', '👀', '💀', '🙏', '😴', '🤡', '🎉', '💯', '🫡', '🥺', '😈', '🤝', '✨', '🍕', '🎮'].map((emoji, i) => ({
@@ -95,7 +95,7 @@ export const uninstall = (id: string) => setInstalled(installedIds().filter((x) 
 
 /** Картинку — в 512×512 webp (как в Telegram). GIF оставляем как есть, чтобы не пропала анимация. */
 export function prepareImage(file: File): Promise<Blob> {
-  if (file.type === 'image/gif') return Promise.resolve(file);
+  if (file.type === 'image/gif' || file.type.startsWith('video/')) return Promise.resolve(file);
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -128,20 +128,44 @@ function offlinePacks(): StickerPack[] {
   }
 }
 
+/** Видеостикер: не длиннее 3 секунд (как в Telegram) */
+export function checkVideo(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    const v = document.createElement('video');
+    const url = URL.createObjectURL(file);
+    v.preload = 'metadata';
+    v.muted = true;
+    v.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(v.duration > 3.05 ? `«${file.name}» длится ${v.duration.toFixed(1)} с — видеостикер не длиннее 3 секунд` : null);
+    };
+    v.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(`«${file.name}» — не получилось прочитать видео`);
+    };
+    v.src = url;
+  });
+}
+
 /** Создать набор из своих картинок. Возвращает новый набор (он сразу добавлен себе). */
 export async function createPack(name: string, items: { file: File; emoji: string }[], onProgress?: (done: number) => void): Promise<StickerPack> {
   const title = name.trim().slice(0, 64) || 'Мои стикеры';
   const stickers: Sticker[] = [];
   for (const [i, it] of items.slice(0, 60).entries()) {
+    const video = it.file.type.startsWith('video/');
+    if (video) {
+      const bad = await checkVideo(it.file);
+      if (bad) throw new Error(bad);
+    }
     const blob = await prepareImage(it.file);
     if (blob.size > 3 * 1024 * 1024) throw new Error(`«${it.file.name}» больше 3 МБ — для стикера это слишком`);
     let url: string;
     if (ONLINE && aw) {
-      const ext = blob.type === 'image/gif' ? 'gif' : 'webp';
+      const ext = video ? (blob.type.includes('mp4') ? 'mp4' : 'webm') : blob.type === 'image/gif' ? 'gif' : 'webp';
       const f = await aw.storage.createFile({ bucketId: BUCKET, fileId: ID.unique(), file: new File([blob], `sticker.${ext}`, { type: blob.type }), permissions: [Permission.read(Role.any())] });
       url = aw.storage.getFileView({ bucketId: BUCKET, fileId: f.$id });
     } else url = await blobToDataUrl(blob);
-    stickers.push({ id: `s${i}`, url, emoji: it.emoji || '🙂' });
+    stickers.push({ id: `s${i}`, url, emoji: it.emoji || '🙂', ...(video ? { video: true } : {}) });
     onProgress?.(i + 1);
   }
   let pack: StickerPack;
@@ -161,6 +185,29 @@ export async function createPack(name: string, items: { file: File; emoji: strin
     } catch {
       throw new Error('Не хватает места на устройстве — в офлайн-режиме наборы хранятся локально');
     }
+  }
+  packs.set(pack.id, pack);
+  await install(pack.id);
+  return pack;
+}
+
+/** Копия чужого набора себе — можно переименовать, менять и дополнять как свой */
+export async function copyPack(src: StickerPack, name?: string): Promise<StickerPack> {
+  const title = (name ?? `${src.name} (копия)`).trim().slice(0, 64);
+  const stickers = src.stickers.map((s, i) => ({ ...s, id: `s${i}` }));
+  let pack: StickerPack;
+  if (ONLINE && aw && myId) {
+    const row = await aw.db.createRow<PackRow>({
+      databaseId: DB,
+      tableId: 'stickerPacks',
+      rowId: ID.unique(),
+      data: { name: title, authorId: myId, stickers: JSON.stringify(stickers) },
+      permissions: [Permission.read(Role.users()), Permission.update(Role.user(myId)), Permission.delete(Role.user(myId))],
+    });
+    pack = fromRow(row);
+  } else {
+    pack = { id: `local-${Date.now().toString(36)}`, name: title, authorId: ME, stickers };
+    localStorage.setItem(OFFLINE_KEY, JSON.stringify([...offlinePacks(), pack]));
   }
   packs.set(pack.id, pack);
   await install(pack.id);

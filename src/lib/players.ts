@@ -42,7 +42,7 @@ export function parseVideoUrl(raw: string): ParsedVideo | null {
     const id = /^\/(?:video|play\/embed|shorts)\/([a-f0-9]{32})/i.exec(u.pathname)?.[1];
     return id ? { kind: 'rutube', src: id.toLowerCase(), start, title: 'Rutube' } : null;
   }
-  // прямая ссылка на видеофайл (или файл из хранилища Fizion)
+  // прямая ссылка на видеофайл (или файл из хранилища Neon)
   if (/\.(mp4|webm|ogv|ogg|mov|m4v|mkv)$/i.test(u.pathname) || /\/storage\/buckets\/.+\/files\/.+\/view/.test(u.pathname)) {
     const name = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() ?? 'Видео');
     return { kind: 'file', src: u.href, start, title: /^view$/.test(name) ? 'Видео' : name };

@@ -3,6 +3,8 @@ import * as social from '../online/social';
 import { ME } from '../data';
 import { Icon, type IconName } from '../icons';
 import { toast } from '../online/sync';
+import { ONLINE } from '../lib/appwrite';
+import { GiftModal, ProfileGifts } from './Wallet';
 import { actions, setUi, useStore } from '../store';
 import type { Profile, User, Visibility, Widget } from '../types';
 import { Modal, StoryAvatar, nameStyleOf, personFromProfile, personFromUser, presenceLabel } from './common';
@@ -24,7 +26,7 @@ export const cardLook = (p: Pick<Profile, 'cardStyle' | 'cardColor' | 'nameColor
 export const bannerLook = (p: Pick<Profile, 'bannerColor' | 'bannerColor2' | 'bannerImage'>): CSSProperties =>
   p.bannerImage ? { background: `center/cover url(${p.bannerImage})` } : { background: `radial-gradient(circle at 85% 10%, ${p.bannerColor2}99, transparent 55%), ${p.bannerColor}` };
 
-const badgeList: { icon: IconName; label: string }[] = [{ icon: 'star', label: 'Ранний тестер Fizion' }];
+const badgeList: { icon: IconName; label: string }[] = [{ icon: 'star', label: 'Ранний тестер Neon' }];
 
 const canSee = (v: Visibility, asStranger: boolean) => v === 'all' || (v === 'friends' && !asStranger);
 
@@ -246,6 +248,7 @@ export function ProfileModal({ userId }: { userId: string }) {
   const isFriend = friends.includes(userId);
 
   const addFriend = async () => toast(await actions.requestFriend(userId));
+  const [gift, setGift] = useState(false);
 
   // демо-пользователи офлайн-режима без оформления — простая карточка
   if (!isMe && (!user || !user.profile)) {
@@ -387,11 +390,17 @@ export function ProfileModal({ userId }: { userId: string }) {
                     В друзья
                   </button>
                 )}
+                {ONLINE && (
+                  <button type="button" className="btn" onClick={() => setGift(true)}>
+                    <Icon name="gift" size={16} /> Подарок
+                  </button>
+                )}
                 <BlockButton userId={userId} />
               </>
             )}
           </div>
         </div>
+        <ProfileBasics userId={userId} profile={profile} />
         <div className="pm-grid">{blocks}</div>
         {blocks.length === 0 && (
           <p className="muted pad-l">{isMe ? 'Профиль пока пустой. Добавь «О себе», ссылки или витрину работ в редакторе.' : 'Пользователь пока не заполнил профиль или скрыл его.'}</p>
@@ -400,7 +409,61 @@ export function ProfileModal({ userId }: { userId: string }) {
       <button type="button" className="close-x" aria-label="Закрыть" onClick={close}>
         <Icon name="close" />
       </button>
+      {gift && <GiftModal to={userId} onClose={() => setGift(false)} />}
     </Modal>
+  );
+}
+
+/** Главное о человеке: логин, ID, о себе, во что играет сейчас, все его истории и подарки */
+function ProfileBasics({ userId, profile }: { userId: string; profile: Profile }) {
+  const all = useStore((s) => s.stories);
+  const stories = all.filter((x) => x.authorId === userId && x.expiresAt > Date.now()).sort((a, b) => a.ts - b.ts);
+  const copy = (t: string, what: string) => {
+    void navigator.clipboard?.writeText(t);
+    setUi({ toast: { text: `${what} скопирован`, id: Date.now() } });
+  };
+  const live = profile.liveApp && Date.now() - profile.liveApp.since < 6 * 3600_000 ? profile.liveApp : null;
+  return (
+    <div className="pm-basics">
+      <div className="pm-facts">
+        <button type="button" className="fact" onClick={() => copy('@' + profile.username, 'Логин')} title="Скопировать">
+          <span className="muted small">Логин</span>
+          <b>@{profile.username}</b>
+        </button>
+        {profile.num && (
+          <button type="button" className="fact" onClick={() => copy(profile.num!, 'ID')} title="Скопировать">
+            <span className="muted small">ID</span>
+            <b>{profile.num}</b>
+          </button>
+        )}
+        {live && (
+          <span className="fact live">
+            <span className="muted small">Сейчас</span>
+            <b>
+              <Icon name="gamepad" size={14} /> {live.name}
+            </b>
+          </span>
+        )}
+      </div>
+      <div className="pm-about">
+        <div className="sec">О СЕБЕ</div>
+        <div className="pcard-text">{profile.about || (userId === ME ? 'Расскажи о себе в редакторе профиля.' : 'Пока ничего не рассказал о себе.')}</div>
+      </div>
+      {stories.length > 0 && (
+        <div className="pm-stories">
+          <div className="sec">ИСТОРИИ · {stories.length}</div>
+          <div className="pm-story-row">
+            {stories.map((st, i) => (
+              <button type="button" key={st.id} className="pm-story" aria-label={`История ${i + 1}`} onClick={() => setUi({ modal: null, stories: { userId, index: i } })}>
+                {st.kind === 'video' ? <video src={st.url} muted preload="metadata" /> : <img src={st.url} alt="" loading="lazy" />}
+                <span className="small">{new Date(st.ts).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <ProfileGifts userId={userId} />
+    </div>
   );
 }
 

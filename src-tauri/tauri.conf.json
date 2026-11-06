@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Fizion",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "identifier": "app.fizion.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Fizion",
+        "title": "Neon",
         "width": 1280,
         "height": 800,
         "minWidth": 940,

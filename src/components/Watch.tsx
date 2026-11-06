@@ -94,7 +94,7 @@ function WatchStartModal({ chatId, onClose }: { chatId: string; onClose: () => v
         <Icon name="film" size={18} />
         <span>
           <b>Свой файл с компьютера</b>
-          <span className="muted small">Фильм, серия аниме — любого размера. У друга должен быть такой же файл: Fizion попросит его выбрать и синхронизирует время.</span>
+          <span className="muted small">Фильм, серия аниме — любого размера. У друга должен быть такой же файл: Neon попросит его выбрать и синхронизирует время.</span>
         </span>
       </button>
       <input

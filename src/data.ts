@@ -104,7 +104,7 @@ export const emptyState = (settings?: Settings): PersistedState => ({
   lastChannel: {},
 });
 
-/** Фирменный цвет Fizion 0.10 — как в Discord */
+/** Фирменный цвет Neon 0.10 — как в Discord */
 export const DEFAULT_ACCENT = '#5865F2';
 /** Старые фирменные цвета прошлых версий меняем на новый */
 export const migrateSettings = (s: Settings): Settings => (['#8B5CF6', '#FF6A3D', '#2F8CFF'].includes(s.accent.toUpperCase()) ? { ...s, accent: DEFAULT_ACCENT } : s);

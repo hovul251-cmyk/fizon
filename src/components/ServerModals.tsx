@@ -1,3 +1,4 @@
+import { inviteLink } from './Channels';
 import { useEffect, useState } from 'react';
 import { ONLINE } from '../lib/appwrite';
 import { defaultPerms, makeServer, shortName, templates, uid } from '../data';
@@ -124,7 +125,7 @@ export function InviteModal({ server }: { server: Server }) {
     };
   }, [server.id]);
 
-  const link = code ? `fizion.app/i/${code}` : 'Создаю приглашение…';
+  const link = code ? inviteLink(code) : 'Создаю приглашение…';
   return (
     <Modal onClose={close} label="Приглашение" className="form-modal">
       <div className="modal-top left">
@@ -155,9 +156,10 @@ export function InviteModal({ server }: { server: Server }) {
         </label>
         <p className="muted small">
           {ONLINE
-            ? 'Действует 7 дней. Друг вставляет ссылку или код в «+ Сообщества» → «Есть приглашение?».'
+            ? 'Действует 7 дней. Отправь ссылку в любой чат — друг нажмёт на неё и сразу вступит, копировать код не нужно.'
             : 'В офлайн-режиме приглашения не работают — это предпросмотр.'}
         </p>
+        {code && <SendToFriends text={`Заходи в «${server.name}»: ${link}`} />}
       </div>
     </Modal>
   );
@@ -520,5 +522,36 @@ function BansTab({ server }: { server: Server }) {
         ))}
       </div>
     </main>
+  );
+}
+
+/** Отправить ссылку друзьям в личку одной кнопкой */
+function SendToFriends({ text }: { text: string }) {
+  const friends = useStore((s) => s.friends);
+  const [sent, setSent] = useState<string[]>([]);
+  if (!friends.length) return null;
+  return (
+    <div className="send-friends">
+      <div className="cat flat">ОТПРАВИТЬ ДРУЗЬЯМ</div>
+      {friends.slice(0, 30).map((id) => (
+        <FriendSendRow key={id} id={id} sent={sent.includes(id)} onSend={() => {
+          actions.send(`dm:${id}`, text);
+          setSent((l) => [...l, id]);
+        }} />
+      ))}
+    </div>
+  );
+}
+function FriendSendRow({ id, sent, onSend }: { id: string; sent: boolean; onSend: () => void }) {
+  const p = usePerson(id);
+  if (!p) return null;
+  return (
+    <div className="pick-row">
+      <Avatar person={p} size={28} showPresence={false} />
+      <span className="grow ellipsis">{p.name}</span>
+      <button type="button" className={`btn small ${sent ? 'green' : 'primary'}`} disabled={sent} onClick={onSend}>
+        {sent ? 'Отправлено' : 'Отправить'}
+      </button>
+    </div>
   );
 }

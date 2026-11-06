@@ -6,7 +6,7 @@ import type { Server } from '../types';
 
 // Боты и вебхуки сообщества (как в Discord):
 //  - входящий вебхук: внешний сервис шлёт POST на адрес — в комнате появляется сообщение от бота;
-//  - исходящий: Fizion сам отправляет сообщения комнаты на адрес твоего бота, а бот отвечает через входящий.
+//  - исходящий: Neon сам отправляет сообщения комнаты на адрес твоего бота, а бот отвечает через входящий.
 
 function Secret({ id, token, onClose }: { id: string; token: string; onClose: () => void }) {
   const url = remote.webhookUrl(id, token);
@@ -119,7 +119,7 @@ export function BotsTab({ server }: { server: Server }) {
               <input
                 className="input"
                 aria-label="Адрес твоего бота"
-                placeholder="Необязательно: https://адрес-твоего-бота — Fizion будет присылать ему сообщения комнаты"
+                placeholder="Необязательно: https://адрес-твоего-бота — Neon будет присылать ему сообщения комнаты"
                 value={outUrl}
                 onChange={(e) => setOutUrl(e.target.value)}
               />
@@ -150,7 +150,7 @@ export function BotsTab({ server }: { server: Server }) {
             ))}
             <details className="muted small">
               <summary>Как сделать своего бота</summary>
-              Укажи «Адрес твоего бота» — Fizion будет отправлять туда каждое сообщение комнаты (POST JSON: room, author, content). Подпись запроса — заголовок
+              Укажи «Адрес твоего бота» — Neon будет отправлять туда каждое сообщение комнаты (POST JSON: room, author, content). Подпись запроса — заголовок
               X-Fizion-Signature: HMAC-SHA256 тела, ключ — SHA-256 от секрета вебхука. Ответить в комнату бот может через адрес вебхука. Бот видит только сообщения своей
               комнаты; личные и группы ботам недоступны.
             </details>

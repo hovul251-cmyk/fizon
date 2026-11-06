@@ -74,7 +74,7 @@ export async function send(chatId: string, msg: Message) {
   // личные и группы шифруются сами, если ключи есть у всех. Вложение (с ключом файла) едет внутри шифра.
   if ((chatId.startsWith('dm:') || chatId.startsWith('g:')) && keys.e2eState() === 'waiting') {
     // открытым текстом не отправляем: собеседник ждёт шифрование
-    toast('Ключ шифрования ещё переносится — открой Fizion на другом своём устройстве или создай новый ключ: Настройки → Шифрование');
+    toast('Ключ шифрования ещё переносится — открой Neon на другом своём устройстве или создай новый ключ: Настройки → Шифрование');
     return patchMessage(chatId, msg.id, { pending: false, failed: true });
   }
   let text = msg.text;
@@ -222,7 +222,7 @@ export async function saveProfile(p: Profile): Promise<Profile> {
   } else saved = await updateProfileRow(row);
   if (p.displayName) await api().account.updateName({ name: p.displayName }).catch(() => undefined);
   void trackMe();
-  return { ...p, displayName: saved.displayName, username: saved.username, avatarImage, bannerImage };
+  return { ...p, displayName: saved.displayName, username: saved.username, avatarImage, bannerImage, num: saved.num || p.num };
 }
 
 export async function savePresence(p: Profile) {
@@ -321,8 +321,14 @@ const friendResult = (status: string, name?: string) =>
 
 export async function requestFriendByName(username: string): Promise<string> {
   const name = username.trim().toLowerCase().replace(/^@/, '');
-  if (!name) return 'Введи имя пользователя';
+  if (!name) return 'Введи логин или ID';
   try {
+    // цифры — это ID, как в Telegram
+    if (/^\d{6,12}$/.test(name)) {
+      const u = await call<{ userId: string; username: string }>('find-user', { query: name });
+      const { status } = await call<{ status: string }>('friend-request', { userId: u.userId });
+      return friendResult(status, '@' + u.username);
+    }
     const { status } = await call<{ status: string }>('friend-request', { username: name });
     return friendResult(status, '@' + name);
   } catch (e) {

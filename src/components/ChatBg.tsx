@@ -3,10 +3,12 @@ import { Icon } from '../icons';
 import { ONLINE } from '../lib/appwrite';
 import * as remote from '../online/remote';
 import { actions, useStore } from '../store';
+import type { ChatBg } from '../types';
 
 // Фон чатов: любая своя картинка или гифка, с затемнением и размытием, чтобы текст читался.
 
 const MAX_MB = 15;
+const NONE: Record<string, ChatBg> = {};
 
 const toDataUrl = (f: File) =>
   new Promise<string>((resolve, reject) => {
@@ -16,8 +18,18 @@ const toDataUrl = (f: File) =>
     r.readAsDataURL(f);
   });
 
-export function ChatBgSettings() {
-  const bg = useStore((s) => s.settings.chatBg ?? null);
+/** Без chatKey — общий фон для всех чатов; с chatKey — свой фон только для этого чата */
+export function ChatBgSettings({ chatKey }: { chatKey?: string } = {}) {
+  const bg = useStore((s) => (chatKey ? (s.settings.chatBgs?.[chatKey] ?? null) : (s.settings.chatBg ?? null)));
+  const all = useStore((s) => s.settings.chatBgs) ?? NONE;
+  const panelBg = useStore((s) => !!s.settings.panelBg);
+  const setBg = (v: ChatBg | null) => {
+    if (!chatKey) return actions.updateSettings({ chatBg: v });
+    const next = { ...all };
+    if (v) next[chatKey] = v;
+    else delete next[chatKey];
+    actions.updateSettings({ chatBgs: next });
+  };
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -31,7 +43,7 @@ export function ChatBgSettings() {
     setBusy(true);
     try {
       const url = ONLINE ? await remote.uploadPublic(f) : await toDataUrl(f);
-      actions.updateSettings({ chatBg: { url, dim: bg?.dim ?? 35, blur: bg?.blur ?? 0 } });
+      setBg({ url, dim: bg?.dim ?? 35, blur: bg?.blur ?? 0 });
     } catch (e) {
       setError((e as Error).message);
     }
@@ -40,7 +52,7 @@ export function ChatBgSettings() {
 
   return (
     <div className="field">
-      ФОН ЧАТОВ
+      {chatKey ? 'ФОН ЭТОГО ЧАТА' : 'ФОН ВСЕХ ЧАТОВ'}
       <div className="bg-row">
         <button type="button" className="bg-preview" style={bg ? { backgroundImage: `url("${bg.url}")` } : undefined} onClick={() => input.current?.click()} aria-label="Выбрать фон">
           {!bg && <Icon name="image" size={26} />}
@@ -52,7 +64,7 @@ export function ChatBgSettings() {
               {busy ? 'Загружаю…' : bg ? 'Другая картинка' : 'Выбрать фото или гифку'}
             </button>
             {bg && (
-              <button type="button" className="btn small ghost" onClick={() => actions.updateSettings({ chatBg: null })}>
+              <button type="button" className="btn small ghost" onClick={() => setBg(null)}>
                 Убрать
               </button>
             )}
@@ -61,15 +73,20 @@ export function ChatBgSettings() {
             <>
               <label className="small">
                 Затемнение — {bg.dim}%
-                <input type="range" min={0} max={85} value={bg.dim} onChange={(e) => actions.updateSettings({ chatBg: { ...bg, dim: Number(e.target.value) } })} />
+                <input type="range" min={0} max={85} value={bg.dim} onChange={(e) => setBg({ ...bg, dim: Number(e.target.value) })} />
               </label>
               <label className="small">
                 Размытие — {bg.blur}px
-                <input type="range" min={0} max={20} value={bg.blur} onChange={(e) => actions.updateSettings({ chatBg: { ...bg, blur: Number(e.target.value) } })} />
+                <input type="range" min={0} max={20} value={bg.blur} onChange={(e) => setBg({ ...bg, blur: Number(e.target.value) })} />
               </label>
             </>
           )}
-          <span className="muted small">Любая картинка или гифка до {MAX_MB} МБ. Фон виден только тебе.</span>
+          <span className="muted small">Любая картинка или гифка до {MAX_MB} МБ. Фон виден только тебе.{chatKey ? '' : ' Для отдельного чата — кнопка с картинкой в шапке чата.'}</span>
+          {!chatKey && bg && (
+            <label className="check-row">
+              <input type="checkbox" checked={panelBg} onChange={(e) => actions.updateSettings({ panelBg: e.target.checked })} /> Обои и под панелью со списком чатов
+            </label>
+          )}
           {error && <span className="form-error">{error}</span>}
         </div>
       </div>

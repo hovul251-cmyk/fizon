@@ -11,6 +11,24 @@ import { actions, setUi, useStore } from '../store';
 import type { Settings } from '../types';
 import { Avatar, Toggle, usePerson } from './common';
 import { ChatBgSettings } from './ChatBg';
+import { InterfaceSettings, SecuritySettings, SoundSettings, VoiceSettings } from './SettingsMore';
+import { WalletSettings } from './Wallet';
+import { AdminPanel } from './Admin';
+import type { IconName } from '../icons';
+
+type Tab = 'account' | 'look' | 'ui' | 'voice' | 'sounds' | 'notify' | 'privacy' | 'security' | 'wallet' | 'admin' | null;
+const TITLES: Record<NonNullable<Tab>, string> = {
+  account: 'Мой аккаунт',
+  look: 'Внешний вид',
+  ui: 'Интерфейс',
+  voice: 'Голос и видео',
+  sounds: 'Звуки',
+  notify: 'Уведомления',
+  privacy: 'Шифрование',
+  security: 'Конфиденциальность',
+  wallet: 'Кошелёк и подарки',
+  admin: 'Управление',
+};
 
 const themes: [Settings['theme'], string, string, string][] = [
   ['dark', 'Тёмная', '#1E1F22', '#313338'],
@@ -22,43 +40,75 @@ const themes: [Settings['theme'], string, string, string][] = [
 const accents = ['#5865F2', '#2F8CFF', '#23A55A', '#EB459E', '#F0B232', '#22D3EE', '#9B59B6', '#F23F43'];
 
 export function UserSettings() {
-  const [tab, setTab] = useState<'account' | 'look' | 'voice' | 'notify' | 'privacy'>('look');
+  const [tab, setTabRaw] = useState<Tab>(() => (window.innerWidth <= 760 ? null : 'look'));
+  const [openedOnMobile, setOpened] = useState(false);
   const settings = useStore((s) => s.settings);
   const profile = useStore((s) => s.profile);
   const me = usePerson(ME)!;
   const set = actions.updateSettings;
   const close = () => setUi({ modal: null });
+  const role = useStore((s) => s.ui.staff);
+  const setTab = (t: Tab) => {
+    setTabRaw(t);
+    setOpened(true);
+  };
+  // «Назад»: на телефоне — к списку разделов, на компьютере — закрыть настройки
+  const back = () => {
+    if (window.innerWidth <= 760 && openedOnMobile) {
+      setOpened(false);
+      return;
+    }
+    close();
+  };
+  const item = (t: NonNullable<Tab>, label: string, icon: IconName) => (
+    <button type="button" className={`nav-item ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>
+      <Icon name={icon} size={18} /> <span className="grow">{label}</span> <Icon name="chevronRight" size={14} className="m-only" />
+    </button>
+  );
+  const title = TITLES[tab ?? 'look'];
 
   return (
-    <div className="fullscreen" role="dialog" aria-modal="true" aria-label="Настройки">
+    <div className={`fullscreen settings-screen ${openedOnMobile ? 'm-open' : 'm-list'}`} role="dialog" aria-modal="true" aria-label="Настройки">
       <nav className="settings-nav">
+        <div className="settings-top m-only">
+          <button type="button" className="back-btn" onClick={close} aria-label="Назад">
+            <Icon name="arrowLeft" size={20} /> Назад
+          </button>
+          <b>Настройки</b>
+        </div>
         <div className="cat">АККАУНТ</div>
-        <button type="button" className={`nav-item ${tab === 'account' ? 'on' : ''}`} onClick={() => setTab('account')}>
-          Мой аккаунт
-        </button>
+        {item('account', 'Мой аккаунт', 'user')}
         <button type="button" className="nav-item" onClick={() => setUi({ modal: { kind: 'editor' } })}>
-          Профиль
+          <Icon name="edit" size={18} /> <span className="grow">Профиль</span> <Icon name="chevronRight" size={14} className="m-only" />
         </button>
+        {item('security', 'Конфиденциальность', 'lock')}
+        {item('wallet', 'Кошелёк и подарки', 'gift')}
         <div className="cat">ПРИЛОЖЕНИЕ</div>
-        <button type="button" className={`nav-item ${tab === 'look' ? 'on' : ''}`} onClick={() => setTab('look')}>
-          Внешний вид
-        </button>
-        <button type="button" className={`nav-item ${tab === 'voice' ? 'on' : ''}`} onClick={() => setTab('voice')}>
-          Голос и видео
-        </button>
-        <button type="button" className={`nav-item ${tab === 'notify' ? 'on' : ''}`} onClick={() => setTab('notify')}>
-          {IS_DESKTOP_APP ? 'Уведомления, Windows, обновления' : 'Уведомления и обновления'}
-        </button>
-        <button type="button" className={`nav-item ${tab === 'privacy' ? 'on' : ''}`} onClick={() => setTab('privacy')}>
-          Шифрование
-        </button>
+        {item('look', 'Внешний вид', 'image')}
+        {item('ui', 'Интерфейс', 'layout')}
+        {item('voice', 'Голос и видео', 'mic')}
+        {item('sounds', 'Звуки', 'bell')}
+        {item('notify', IS_DESKTOP_APP ? 'Уведомления и обновления' : 'Уведомления', 'inbox')}
+        {item('privacy', 'Шифрование', 'shield')}
+        {role && (
+          <>
+            <div className="cat">УПРАВЛЕНИЕ</div>
+            {item('admin', role === 'owner' ? 'Панель владельца' : 'Панель админа', 'crown')}
+          </>
+        )}
         <div className="menu-sep" />
         <button type="button" className="nav-item danger" onClick={() => { close(); void actions.logout(); }}>
-          Выйти
+          <Icon name="logout" size={18} /> <span className="grow">Выйти</span>
         </button>
-        <div className="muted small pad">Fizion {APP_VERSION} · {IS_DESKTOP_APP ? 'Windows' : IS_TAURI ? 'Android' : 'веб'} · {ONLINE ? 'онлайн' : 'офлайн-режим'}</div>
+        <div className="muted small pad">Neon {APP_VERSION} · {IS_DESKTOP_APP ? 'Windows' : IS_TAURI ? 'Android' : 'веб'} · {ONLINE ? 'онлайн' : 'офлайн-режим'}</div>
       </nav>
       <main className="settings-main">
+        <div className="settings-back">
+          <button type="button" className="back-btn" onClick={back}>
+            <Icon name="arrowLeft" size={20} /> Назад
+          </button>
+          <b className="m-only">{title}</b>
+        </div>
         {tab === 'look' && (
           <>
             <div className="settings-head">
@@ -178,7 +228,7 @@ export function UserSettings() {
                   <div className="strong">Где хранятся данные</div>
                   <div className="muted small">
                     {ONLINE
-                      ? 'Сообщения, сообщества и профиль хранятся на сервере Fizion и доступны с любого устройства.'
+                      ? 'Сообщения, сообщества и профиль хранятся на сервере Neon и доступны с любого устройства.'
                       : 'Офлайн-режим: сообщения, сообщества и профиль хранятся только на этом компьютере.'}
                   </div>
                 </div>
@@ -191,7 +241,7 @@ export function UserSettings() {
                     <div className="strong">Сбросить все данные</div>
                     <div className="muted small">Удалит локальные сообщества, сообщения и профиль</div>
                   </div>
-                  <button type="button" className="btn danger-outline" onClick={() => confirm('Удалить все локальные данные Fizion?') && actions.resetAll()}>
+                  <button type="button" className="btn danger-outline" onClick={() => confirm('Удалить все локальные данные Neon?') && actions.resetAll()}>
                     Сбросить
                   </button>
                 </div>
@@ -199,22 +249,14 @@ export function UserSettings() {
             </div>
           </>
         )}
-        {tab === 'voice' && (
-          <>
-            <div className="settings-head">
-              <h1>Голос и видео</h1>
-            </div>
-            <div className="ed-col narrow">
-              <p className="muted">
-                {ONLINE
-                  ? 'Шумоподавление, эхоподавление и автоусиление микрофона включены. Выбор устройств появится в следующей версии.'
-                  : 'Голос работает в онлайн-режиме — см. README.'}
-              </p>
-            </div>
-          </>
-        )}
+        {tab === 'voice' && <VoiceSettings />}
         {tab === 'notify' && <NotifySettings />}
         {tab === 'privacy' && <PrivacySettings />}
+        {tab === 'security' && <SecuritySettings />}
+        {tab === 'ui' && <InterfaceSettings />}
+        {tab === 'sounds' && <SoundSettings />}
+        {tab === 'wallet' && <WalletSettings />}
+        {tab === 'admin' && role && <AdminPanel />}
       </main>
       <button type="button" className="close-round" aria-label="Закрыть настройки" onClick={close}>
         <Icon name="close" />

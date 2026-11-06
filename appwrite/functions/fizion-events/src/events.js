@@ -31,7 +31,14 @@ export function previewText(row) {
 export const mentionsIn = (text) => [...String(text ?? '').matchAll(/@([a-z0-9._]{2,32})/gi)].map((m) => m[1].toLowerCase());
 
 export function createEvents(ctx) {
-  const { db, teams, Query, push, log = () => undefined, fetch: fetchFn = null, hmac = null } = ctx;
+  const { db, teams, users = null, Query, push, log = () => undefined, fetch: fetchFn = null, hmac = null } = ctx;
+  // метки людей (заморожен, бан) — запоминаем на время запуска функции
+  const labelCache = new Map();
+  const labelsOf = async (uid) => {
+    if (!users || !uid) return [];
+    if (!labelCache.has(uid)) labelCache.set(uid, await users.get({ userId: uid }).then((u) => u.labels ?? [], () => []));
+    return labelCache.get(uid);
+  };
   const get = async (tableId, rowId) => {
     try {
       return await db.getRow({ databaseId: DB, tableId, rowId });
@@ -160,11 +167,16 @@ export function createEvents(ctx) {
 
   return {
     async message(row) {
+      // замороженный аккаунт: читать можно, писать нельзя
+      if (!row.botName && (await labelsOf(row.authorId)).includes('frozen')) {
+        await deleteMessage(row);
+        return { deleted: true, frozen: true };
+      }
       const community = await get('communities', row.teamId);
       if (await guard(row, community)) return { deleted: true };
       if (row.botName) return { sent: 0, bot: true };
       const author = await get('profiles', row.authorId);
-      const name = author?.displayName ?? 'Fizion';
+      const name = author?.displayName ?? 'Neon';
       const body = previewText(row);
       if (community) {
         // в сообществе — только тем, кого упомянули через @имя (и ботам комнаты)
@@ -178,6 +190,16 @@ export function createEvents(ctx) {
         return { sent: await notify(to, { title: `${name} · ${community.name}`, body, tag: row.chatId, url: `/?server=${row.teamId}&room=${row.chatId}`, room: room?.name }), bots };
       }
       const group = await get('groups', row.teamId);
+      if (group?.kind === 'channel') {
+        // в канал пишут только владелец и админы канала; подписчикам — без push (как в Telegram, тихо)
+        const m = (await members(row.teamId)).find((x) => x.userId === row.authorId);
+        if (!m || !m.roles.some((r) => r === 'owner' || r === 'admin')) {
+          await deleteMessage(row);
+          return { deleted: true, channel: true };
+        }
+        const to = (await members(row.teamId)).map((x) => x.userId).filter((id) => id !== row.authorId);
+        return { sent: await notify(to, { title: group.name, body, tag: row.chatId, url: `/?group=${row.teamId}` }) };
+      }
       if (!group) {
         // личные: собеседник заблокировал автора — сообщение не доставляем
         const dm = await get('dms', row.teamId);
@@ -207,7 +229,7 @@ export function createEvents(ctx) {
         return { sent: 0, blocked: true };
       }
       const author = await get('profiles', row.fromId);
-      const name = author?.displayName ?? 'Fizion';
+      const name = author?.displayName ?? 'Neon';
       const group = await get('groups', row.dmId);
       const to = row.toId && row.toId !== '*' ? [row.toId] : (await members(row.dmId)).map((m) => m.userId).filter((id) => id !== row.fromId);
       return {
@@ -221,6 +243,31 @@ export function createEvents(ctx) {
       };
     },
   };
+}
+
+/**
+ * Новая сессия входа. Если у человека облачный пароль, сессия разрешена только из одноразового
+ * токена, который выдал сервер после проверки пароля. Остальные (в обход пароля) удаляем сразу.
+ */
+export async function onSession(ctx, session) {
+  const { db, users, log = () => undefined } = ctx;
+  const uid = session?.userId;
+  if (!uid) return { skipped: 'no user' };
+  const sec = await db.getRow({ databaseId: DB, tableId: 'secure', rowId: uid }).catch(() => null);
+  const labels = await users.get({ userId: uid }).then((u) => u.labels ?? [], () => []);
+  const kill = async (why) => {
+    await users.deleteSession({ userId: uid, sessionId: session.$id }).catch(() => undefined);
+    await db.createRow({ databaseId: DB, tableId: 'logs', rowId: 'unique()', data: { kind: 'security', actorId: uid, targetId: uid, text: why }, permissions: [] }).catch(() => undefined);
+    log(`session ${session.$id} of ${uid} removed: ${why}`);
+    return { removed: true };
+  };
+  if (labels.includes('banned')) return kill('Попытка входа в забаненный аккаунт');
+  if (!sec?.hash) return { ok: true };
+  if (session.provider === 'token' && (sec.allowUntil ?? 0) > Date.now()) {
+    await db.updateRow({ databaseId: DB, tableId: 'secure', rowId: uid, data: { allowUntil: 0 } }).catch(() => undefined);
+    return { ok: true };
+  }
+  return kill('Вход без облачного пароля — сессия удалена');
 }
 
 /** По имени события Appwrite выбрать обработчик */

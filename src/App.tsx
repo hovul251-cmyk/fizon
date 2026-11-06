@@ -5,6 +5,7 @@ import { ChatView } from './components/ChatView';
 import { PluginsView } from './components/PluginsView';
 import { SearchView } from './components/SearchView';
 import { NewGroupModal } from './components/Groups';
+import { JoinChannelModal, JoinInviteModal, NewChannelModal } from './components/Channels';
 import { startPlugins } from './plugins/host';
 import { IS_TAURI } from './lib/platform';
 import { FeedView, ReelComposer } from './components/Feed';
@@ -28,6 +29,13 @@ import { ONLINE } from './lib/appwrite';
 import * as sync from './online/sync';
 import { actions, getState, setUi, useStore } from './store';
 import type { Server } from './types';
+// новое в 0.11 — после store, чтобы порядок загрузки модулей не менялся
+import { setSoundPrefs } from './lib/sound';
+import { applyUiPrefs } from './components/SettingsMore';
+import { PromptHost, StartupUpdate, useNotifyPrompt } from './components/Prompts';
+import { Mascot } from './components/Mascot';
+import { RemoteHost } from './components/Remote';
+import { refreshActivity, startActivity } from './lib/activity';
 
 /** Подставляем выбранную тему и акцент в CSS-переменные. */
 function useTheme() {
@@ -39,15 +47,17 @@ function useTheme() {
     root.style.setProperty('--accent', settings.accent);
     root.style.setProperty('--font-size', `${settings.fontSize}px`);
     root.classList.toggle('reduce-motion', settings.reduceMotion);
-    // свой фон чатов
+    // общий фон чатов — ещё и под панелью со списком, если включено
     const bg = settings.chatBg;
-    if (bg?.url) {
-      root.dataset.chatbg = '1';
+    if (bg?.url && settings.panelBg) {
+      root.dataset.panelbg = '1';
       root.style.setProperty('--chat-bg', `url("${bg.url.replace(/"/g, '%22')}")`);
       root.style.setProperty('--chat-bg-dim', String(bg.dim / 100));
-      root.style.setProperty('--chat-bg-blur', `${bg.blur}px`);
-    } else delete root.dataset.chatbg;
+    } else delete root.dataset.panelbg;
+    applyUiPrefs(root, settings.ui);
+    setSoundPrefs(settings.sounds, settings.audio?.output);
   }, [settings]);
+  useEffect(refreshActivity, [settings.shareActivity]);
 }
 
 function EmptyServer({ server }: { server: Server }) {
@@ -172,6 +182,12 @@ function Modals() {
       return <ReelComposer />;
     case 'newGroup':
       return <NewGroupModal />;
+    case 'newChannel':
+      return <NewChannelModal />;
+    case 'joinChannel':
+      return <JoinChannelModal handle={modal.handle} />;
+    case 'joinInvite':
+      return <JoinInviteModal code={modal.code} />;
   }
 }
 
@@ -193,8 +209,8 @@ function Toast() {
 function Splash() {
   return (
     <div className="splash">
-      <div className="logo pulse">F</div>
-      <span className="muted">Подключаюсь к Fizion…</span>
+      <Mascot size={120} />
+      <span className="muted">Подключаюсь к Neon…</span>
     </div>
   );
 }
@@ -204,9 +220,10 @@ function useOnline() {
   useEffect(() => {
     initNotify();
     startPlugins();
+    startActivity();
     if (!ONLINE) return;
     void sync.start().then((ok) => ok && openFromUrl(location.search));
-    // нажали на push-уведомление, а Fizion уже открыт
+    // нажали на push-уведомление, а Neon уже открыт
     const onSw = (e: MessageEvent) => e.data?.type === 'fizion-open' && openFromUrl(new URL(e.data.url, location.origin).search);
     navigator.serviceWorker?.addEventListener('message', onSw);
     return () => navigator.serviceWorker?.removeEventListener('message', onSw);
@@ -221,7 +238,11 @@ function openFromUrl(search: string) {
   const group = q.get('group');
   const server = q.get('server');
   const room = q.get('room');
-  if (dm) actions.openDm(dm);
+  const invite = q.get('invite');
+  const channel = q.get('c');
+  if (invite) setUi({ modal: { kind: 'joinInvite', code: invite } });
+  else if (channel) setUi({ modal: { kind: 'joinChannel', handle: channel } });
+  else if (dm) actions.openDm(dm);
   else if (group) actions.openHome(`g:${group}`);
   else if (server && room) {
     actions.openServer(server);
@@ -234,6 +255,7 @@ function openFromUrl(search: string) {
 export function App() {
   useTheme();
   useOnline();
+  useNotifyPrompt();
   const booting = useStore((s) => s.ui.booting);
   const net = useStore((s) => s.ui.net);
   const loggedIn = useStore((s) => s.loggedIn);
@@ -269,6 +291,9 @@ export function App() {
       )}
       <Toast />
       <UpdateBanner />
+      <PromptHost />
+      {loggedIn && <RemoteHost />}
+      <StartupUpdate />
     </div>
   );
 }

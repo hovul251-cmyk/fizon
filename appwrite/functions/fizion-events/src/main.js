@@ -1,10 +1,10 @@
 // Точка входа fizion-events. Два дела в одной функции (на бесплатном Appwrite — максимум 2 функции):
 //  1) Appwrite вызывает её сам на новые сообщения и звонки: push, мут, медленный режим, исходящие боты;
 //  2) по её публичному адресу внешние сервисы шлют входящие вебхуки (сообщения ботов в комнату).
-import { Client, ID, Permission, Query, Role, TablesDB, Teams } from 'node-appwrite';
+import { Client, ID, Permission, Query, Role, TablesDB, Teams, Users } from 'node-appwrite';
 import webpush from 'web-push';
 import { createHmac } from 'node:crypto';
-import { handle } from './events.js';
+import { handle, onSession } from './events.js';
 import { receive } from './hooks.js';
 
 export default async ({ req, res, log, error }) => {
@@ -38,12 +38,17 @@ export default async ({ req, res, log, error }) => {
       );
       return res.json(out.body, out.status);
     }
+    // новая сессия входа: проверка облачного пароля и бана
+    if (/^users\.[^.]+\.sessions\.[^.]+\.create$/.test(event)) {
+      const s = req.bodyJson ?? JSON.parse(req.body || '{}');
+      return res.json(await onSession({ db, users: new Users(client), log }, s));
+    }
     // событие: строку берём из базы, а не из запроса — подделанное событие ничего не изменит
     const m = /\.tables\.(messages|calls)\.rows\.([^.]+)\.create$/.exec(event);
     if (!m) return res.json({ skipped: event });
     const row = await db.getRow({ databaseId: 'fizion', tableId: m[1], rowId: m[2] }).catch(() => null);
     if (!row || Date.now() - Date.parse(row.$createdAt) > 120_000) return res.json({ skipped: 'stale' });
-    const result = await handle({ db, teams: new Teams(client), Query, push, log, fetch, hmac: (key, body) => createHmac('sha256', key).update(body).digest('hex') }, event, row);
+    const result = await handle({ db, teams: new Teams(client), users: new Users(client), Query, push, log, fetch, hmac: (key, body) => createHmac('sha256', key).update(body).digest('hex') }, event, row);
     return res.json(result);
   } catch (e) {
     error(String(e?.stack ?? e));

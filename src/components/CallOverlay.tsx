@@ -1,3 +1,4 @@
+import { RemoteRequestButton } from './Remote';
 import { useEffect, useRef, useState } from 'react';
 import { ME } from '../data';
 import { Icon } from '../icons';
@@ -138,6 +139,7 @@ function Controls() {
       <div className="call-controls">
       <IconButton icon={muted ? 'micOff' : 'mic'} label={muted ? 'Включить микрофон' : 'Выключить микрофон'} alert={muted} size={42} onClick={actions.toggleMute} />
       <IconButton icon="video" label={camera ? 'Выключить камеру' : 'Включить камеру'} active={camera} size={42} onClick={actions.toggleCamera} />
+      <RemoteRequestButton size={42} />
       {canShareScreen() && <IconButton icon="screen" label={sharing ? 'Остановить показ экрана' : 'Показать экран'} active={sharing} size={42} onClick={actions.toggleScreen} />}
       <button type="button" className="call-round decline" aria-label="Завершить звонок" onClick={() => void actions.hangUp()}>
         <Icon name="hangup" size={22} />

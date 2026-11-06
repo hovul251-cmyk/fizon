@@ -20,7 +20,7 @@ import { notifyMessage } from '../lib/notify';
 /* ---------- строки таблиц ---------- */
 
 type Row<T> = Models.Row & T;
-export type ProfileRow = Row<{ username: string; displayName: string; avatarUrl: string | null; bannerUrl: string | null; data: string }>;
+export type ProfileRow = Row<{ username: string; displayName: string; avatarUrl: string | null; bannerUrl: string | null; data: string; num?: string | null }>;
 type CommunityRow = Row<{ teamId: string; name: string; color: string; ownerId: string }>;
 type RoomRow = Row<{ teamId: string; name: string; kind: 'text' | 'voice'; category: string; topic: string; position: number; slowmode?: number; stage?: boolean; speakers?: string }>;
 type RoleRow = Row<{ teamId: string; key: string; name: string; color: string; perms: string; position: number }>;
@@ -32,7 +32,7 @@ type DmRow = Row<{ userA: string; userB: string; streak?: number | null; streakD
 export type StoryRow = Row<{ authorId: string; fileId: string; url: string; kind: 'image' | 'video'; caption: string; expiresAt: string; audience?: string }>;
 export type ReelRow = Row<{ authorId: string; fileId: string; url: string; caption: string }>;
 type LikeRow = Row<{ reelId: string; userId: string }>;
-type GroupRow = Row<{ name: string; color: string; ownerId: string; kind?: string | null }>;
+type GroupRow = Row<{ name: string; color: string; ownerId: string; kind?: string | null; handle?: string | null; about?: string | null; isPublic?: boolean | null; subs?: number | null }>;
 type MuteRow = Row<{ teamId: string; userId: string; until: string }>;
 type ReportCountRow = Row<{ teamId: string; status: string }>;
 export type CommentRow = Row<{ reelId: string; authorId: string; text: string }>;
@@ -104,7 +104,7 @@ export const errorText = (e: unknown): string => {
   return m;
 };
 
-/** Вызвать серверную функцию Fizion. Ошибки сервера приходят как Error с понятным текстом. */
+/** Вызвать серверную функцию Neon. Ошибки сервера приходят как Error с понятным текстом. */
 export async function call<T = Record<string, unknown>>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
   const ex = await api().functions.createExecution({
     functionId: FUNCTION,
@@ -140,6 +140,7 @@ export const profileFromRow = (row: ProfileRow): Profile => ({
   username: row.username,
   avatarImage: row.avatarUrl || null,
   bannerImage: row.bannerUrl || null,
+  num: row.num || undefined,
 });
 
 const userFromRow = (row: ProfileRow): User => {
@@ -151,7 +152,8 @@ const userFromRow = (row: ProfileRow): User => {
     color: p.avatarColor,
     nameColor: p.nameColor,
     presence: presenceOf.get(row.$id)?.status ?? 'offline',
-    activity: p.activity || undefined,
+    // «Сейчас в …» из Windows (если человек разрешил) важнее статуса, который он написал сам
+    activity: (p.liveApp && Date.now() - p.liveApp.since < 6 * 3600_000 ? `🎮 ${p.liveApp.name}` : '') || p.activity || undefined,
     about: p.about || undefined,
     profile: p,
   };
@@ -238,7 +240,7 @@ e2e.setKeySource(async (userId) => {
 });
 
 
-const LOCKED_TEXT = '🔒 Зашифровано. Ключ переносится с другого твоего устройства — открой Fizion там, и сообщение появится';
+const LOCKED_TEXT = '🔒 Зашифровано. Ключ переносится с другого твоего устройства — открой Neon там, и сообщение появится';
 
 /** Расшифровать сообщения личной переписки или группы (свои и чужие). Вложения тоже едут внутри шифра. */
 export async function decryptAll(chatKey: string, msgs: Message[]): Promise<Message[]> {
@@ -327,7 +329,12 @@ export async function fetchGroups(ids: string[]): Promise<Group[]> {
     rows.map(async (g) => {
       groupIds.add(g.$id);
       const m = await memberships(g.$id).catch(() => []);
-      return { id: g.$id, name: g.name, color: g.color || '#5865F2', ownerId: L(g.ownerId), members: m.map((x) => L(x.userId)), saved: g.kind === 'saved' || undefined } satisfies Group;
+      const channel =
+        g.kind === 'channel'
+          ? { handle: g.handle ?? '', about: g.about ?? '', subs: g.subs ?? m.length, isPublic: !!g.isPublic, admins: m.filter((x) => x.roles.includes('admin') || x.roles.includes('owner')).map((x) => L(x.userId)) }
+          : undefined;
+      // у канала в «участниках» держим только админов: подписчиков могут быть тысячи
+      return { id: g.$id, name: g.name, color: g.color || '#5865F2', ownerId: L(g.ownerId), members: channel ? channel.admins : m.map((x) => L(x.userId)), saved: g.kind === 'saved' || undefined, channel } satisfies Group;
     }),
   );
   await ensureUsers(groups.flatMap((g) => g.members));
@@ -547,6 +554,7 @@ async function doStart(): Promise<boolean> {
     await social.loadBlocks();
     await subscribe();
     void loadStories();
+    void loadStaff();
     return true;
   } catch (e) {
     setUi({ booting: false });
@@ -631,7 +639,7 @@ async function onMessage(row: MessageRow, kind: Kind) {
 /** Уведомление о новом сообщении и что открыть по нажатию */
 function notifyAbout(key: string, msg: Message) {
   const s = getState();
-  const author = s.users[msg.authorId]?.name ?? 'Fizion';
+  const author = s.users[msg.authorId]?.name ?? 'Neon';
   if (key.startsWith('dm:')) return notifyMessage(key, msg, 'dm', author, () => getActions().openDm(key.slice(3)));
   if (key.startsWith('g:')) {
     const g = s.groups.find((x) => x.id === key.slice(2));
@@ -983,4 +991,18 @@ export async function trackMe() {
       metadata: { voice: v && s.profile.presence !== 'offline' ? { s: v.serverId, c: v.channelId, hand: social.handUp() || undefined } : null, typing: s.profile.presence !== 'offline' ? social.typingMeta() : null },
     })
     .catch(() => undefined);
+}
+
+/** Мой ID (как в Telegram) и права в приложении: владелец/админ, заморожен ли аккаунт */
+export async function loadStaff() {
+  try {
+    const st = await call<{ role: 'owner' | 'admin' | null; frozen: boolean }>('staff-me');
+    setUi({ staff: st.role, frozen: st.frozen });
+    if (!getState().profile.num && hasProfileRow) {
+      const { num } = await call<{ num: string | null }>('my-num');
+      if (num) setState((s) => ({ profile: { ...s.profile, num } }));
+    }
+  } catch {
+    /* старый сервер без этих действий — просто нет панели */
+  }
 }

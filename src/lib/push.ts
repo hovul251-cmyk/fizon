@@ -19,8 +19,8 @@ export async function currentSubscription(): Promise<PushSubscription | null> {
 
 /** Включить push на этом устройстве. Возвращает текст ошибки или null. */
 export async function subscribePush(save: (sub: PushSubscriptionJSON) => Promise<void>): Promise<string | null> {
-  if (IS_TAURI) return 'В приложении для Windows уведомления приходят, пока Fizion работает в трее';
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'Этот браузер не умеет push. На iPhone сначала добавь Fizion на экран «Домой» и открой оттуда';
+  if (IS_TAURI) return 'В приложении для Windows уведомления приходят, пока Neon работает в трее';
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'Этот браузер не умеет push. На iPhone сначала добавь Neon на экран «Домой» и открой оттуда';
   const key = import.meta.env.VITE_VAPID_PUBLIC_KEY;
   if (!key) return 'Push не настроен на сервере — выполни npm run setup';
   if ((await Notification.requestPermission()) !== 'granted') return 'Уведомления запрещены — разреши их в настройках браузера для этого сайта';

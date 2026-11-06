@@ -25,6 +25,9 @@ export type Modal =
   | { kind: 'storyComposer' }
   | { kind: 'reelComposer' }
   | { kind: 'newGroup' }
+  | { kind: 'newChannel' }
+  | { kind: 'joinChannel'; handle: string }
+  | { kind: 'joinInvite'; code: string }
   | null;
 
 export interface UiState {
@@ -65,6 +68,10 @@ export interface UiState {
   videos: Record<string, { track: VideoTrackLike; screen: boolean }>;
   showMembers: boolean;
   search: string;
+  /** Я владелец/админ всего приложения (labels на сервере) */
+  staff: 'owner' | 'admin' | null;
+  /** Аккаунт заморожен: читать можно, писать нельзя */
+  frozen: boolean;
 }
 
 export interface CallState {
@@ -148,6 +155,8 @@ let state: State = {
     sharing: false,
     speaking: [],
     videos: {},
+    staff: null,
+    frozen: false,
     showMembers: false,
     search: '',
   },
@@ -589,6 +598,13 @@ export const actions = {
       sync.toast(sync.errorText(e));
     }
   },
+  /** Группа/канал, в который только что вступили: загрузить и открыть */
+  async openFetchedGroup(id: string) {
+    const [g] = await sync.fetchGroups([id]);
+    if (!g) return;
+    setState((s) => ({ groups: s.groups.some((x) => x.id === id) ? s.groups.map((x) => (x.id === id ? g : x)) : [g, ...s.groups] }));
+    actions.openHome(`g:${id}`);
+  },
   async addToGroup(groupId: string, userId: string) {
     try {
       await remote.addToGroup(groupId, userId);
@@ -600,6 +616,10 @@ export const actions = {
   async renameGroup(groupId: string, name: string) {
     setState((s) => ({ groups: s.groups.map((g) => (g.id === groupId ? { ...g, name } : g)) }));
     await remote.renameGroup(groupId, name).catch((e) => sync.toast(sync.errorText(e)));
+  },
+  /** Убрать группу/канал из списка (сервер уже отписал) */
+  async leaveGroupLocal(groupId: string) {
+    setState((s) => ({ groups: s.groups.filter((g) => g.id !== groupId), ui: { ...s.ui, homeTab: 'friends', mobileChat: false } }));
   },
   async leaveGroup(groupId: string) {
     setState((s) => ({ groups: s.groups.filter((g) => g.id !== groupId), ui: { ...s.ui, homeTab: 'friends', mobileChat: false } }));
@@ -713,7 +733,10 @@ async function endCall(status: 'ended' | 'missed' | 'declined' | null, note?: st
   if (c.mine && c.callId) actions.send(`dm:${c.userId}`, c.since ? `📞 Звонок · ${fmtDuration(Date.now() - c.since)}` : '📞 Пропущенный звонок');
 }
 
-if (ONLINE) {
+// регистрация обработчиков — после загрузки всех модулей (у store и sync взаимный импорт)
+const registerHandlers = () => {
+  sync.provideActions(() => actions);
+  if (!ONLINE) return;
   voice.setCallLostHandler(() => void endCall('ended', 'Связь со звонком прервалась'));
   sync.setCallHandler((row, kind) => {
     const c = state.ui.call;
@@ -772,5 +795,6 @@ export const storyAuthors = (s: State = state): string[] => {
   });
 };
 
-// sync берёт действия отсюда лениво (модули импортируют друг друга)
-sync.provideActions(() => actions);
+// sync берёт действия отсюда лениво (модули импортируют друг друга) — регистрируем,
+// когда все модули уже загружены, иначе порядок сборки может оказаться другим
+queueMicrotask(registerHandlers);

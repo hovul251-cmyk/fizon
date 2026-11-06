@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import { ME } from '../data';
 import { Icon, type IconName } from '../icons';
 import { startRecording, type Recording } from '../lib/recorder';
@@ -12,16 +12,45 @@ import { WatchArea, WatchButton } from './Watch';
 import * as social from '../online/social';
 import { ForwardModal } from './Forward';
 import { AttachMenu, GameView, PollComposer, PollView, RoundRecorder, RoundVideo, sendGame } from './Extras';
+import { ChatBgSettings } from './ChatBg';
+import { LINK_RE, openFizionLink, parseFizionLink } from './Channels';
 import { StickerMessage, StickerPicker } from './Stickers';
 import type { Attachment, Message, Server } from '../types';
-import { Avatar, BackButton, formatDay, formatTime, IconButton, onAvatarClick, openCard, usePerson } from './common';
+import { Avatar, BackButton, formatDay, formatTime, IconButton, Modal, onAvatarClick, openCard, usePerson } from './common';
 
 const EMOJIS = ['🔥', '👍', '😂', '❤️', '😮', '🎉', '👀', '💜', '✨', '🙏', '😎', '🤝', '🎮', '🎬', '💯', '😢'];
 const EMPTY: Message[] = [];
 const presenceText = (p: string) => ({ online: 'в сети', idle: 'отошёл', dnd: 'не беспокоить', offline: 'не в сети' })[p] ?? '';
 
+const isService = (m: Message) => !!m.attachment?.service || (!m.attachment && /^📞 (Звонок · |Пропущенный звонок$)/.test(m.text));
+
 function renderText(text: string, myName: string): ReactNode[] {
-  return text.split(/(@[\p{L}\p{N}_.]+|#[\p{L}\p{N}_-]+)/u).map((part, i) => {
+  // ссылки: приглашения и каналы Neon открываются прямо в приложении, остальные — в браузере
+  return text.split(LINK_RE).flatMap<ReactNode>((chunk, j) => {
+    if (j % 2 === 1) {
+      const ours = parseFizionLink(chunk);
+      return [
+        <a
+          key={`l${j}`}
+          className={`msg-link ${ours ? 'fizion-link' : ''}`}
+          href={chunk.startsWith('fizion://') ? undefined : chunk}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => {
+            if (openFizionLink(chunk)) e.preventDefault();
+          }}
+        >
+          {ours ? (ours.kind === 'invite' ? '🔗 Приглашение в сообщество' : `📣 Канал @${ours.value}`) : chunk}
+        </a>,
+      ];
+    }
+    return renderMentions(chunk, myName, j);
+  });
+}
+
+function renderMentions(text: string, myName: string, j: number): ReactNode[] {
+  return text.split(/(@[\p{L}\p{N}_.]+|#[\p{L}\p{N}_-]+)/u).map((part, k) => {
+    const i = `${j}-${k}`;
     if (part.startsWith('@') && part.length > 1) return <span key={i} className={`mention ${part.slice(1).toLowerCase() === myName.toLowerCase() ? 'me' : ''}`}>{part}</span>;
     if (part.startsWith('#') && part.length > 1) return <span key={i} className="mention">{part}</span>;
     return part;
@@ -92,7 +121,7 @@ function VoiceNote({ a }: { a: Attachment }) {
   );
 }
 
-/** Расшифрованные файлы: ссылка → blob-адрес (живёт, пока открыт Fizion) */
+/** Расшифрованные файлы: ссылка → blob-адрес (живёт, пока открыт Neon) */
 const openedFiles = new Map<string, Promise<string>>();
 
 /** Адрес вложения для показа. Зашифрованный файл скачивается и расшифровывается здесь, на устройстве. */
@@ -225,6 +254,16 @@ const MessageRow = memo(function MessageRow({ chatId, msg, head, badge, replyTo,
   const [sel, setSel] = useState(false);
   if (!author) return null;
   const mine = msg.authorId === ME;
+  // служебные сообщения программы (звонки, подарки, события) — по центру, как в Telegram
+  if (isService(msg))
+    return (
+      <div className="msg-service" data-id={msg.id}>
+        <span>
+          {msg.attachment?.service ? msg.text : `${msg.text.replace(/^📞\s*/, mine ? '📞 Исходящий · ' : '📞 Входящий · ').replace(/· Звонок · /, '· ')}`}
+          <time>{new Date(msg.ts).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</time>
+        </span>
+      </div>
+    );
 
   const saveEdit = () => {
     const t = draft.trim();
@@ -249,10 +288,12 @@ const MessageRow = memo(function MessageRow({ chatId, msg, head, badge, replyTo,
     <div id={`m-${msg.id}`} className={`msg ${(msg.attachment?.sticker || msg.attachment?.round || msg.attachment?.game) && !msg.text ? 'sticker-msg' : ''} ${pinned ? 'pinned' : ''} ${sel ? 'sel' : ''} ${mine ? 'mine' : 'theirs'} ${head ? 'head' : ''} ${msg.pending ? 'pending' : ''} ${pinged ? 'ping' : ''}`}>
       {showGutter && (
         <div className="msg-gutter">
-          {head && (
+          {head ? (
             <button type="button" className="plain" onClick={(e) => onAvatarClick(msg.authorId, e)} aria-label={`Профиль ${author.name}`}>
               <Avatar person={author} size={36} showPresence={false} />
             </button>
+          ) : (
+            <time className="gutter-time">{new Date(msg.ts).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</time>
           )}
         </div>
       )}
@@ -372,6 +413,8 @@ const MessageRow = memo(function MessageRow({ chatId, msg, head, badge, replyTo,
 
 interface Props {
   chatId: string;
+  /** Только чтение (канал для подписчика): вместо поля ввода — эта плашка */
+  readOnly?: ReactNode;
   title: string;
   icon: IconName | 'avatar' | 'community';
   avatarUserId?: string;
@@ -394,7 +437,8 @@ interface Props {
   intro: ReactNode;
 }
 
-export function ChatView({ chatId, title, icon, avatarUserId, community, topic, placeholder, ownerId, showMembersToggle, crumb, onInvite, onCall, server, encrypted, extraTools, intro }: Props) {
+export function ChatView({ chatId, title, icon, avatarUserId, community, topic, placeholder, ownerId, showMembersToggle, crumb, onInvite, onCall, server, encrypted, extraTools, intro, readOnly }: Props) {
+  const frozen = useStore((s) => s.ui.frozen);
   const messages = useStore((s) => s.messages[chatId] ?? EMPTY);
   const atStart = useStore((s) => !!s.ui.chatEnd[chatId]);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -409,6 +453,8 @@ export function ChatView({ chatId, title, icon, avatarUserId, community, topic, 
   const [picker, setPicker] = useState(false);
   const [stickers, setStickers] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [bgOpen, setBgOpen] = useState(false);
+  const bg = useStore((s) => s.settings.chatBgs?.[chatId] ?? s.settings.chatBg ?? null);
   const [pollOpen, setPollOpen] = useState(false);
   const [roundOpen, setRoundOpen] = useState(false);
   const [recording, setRecording] = useState<Recording | null>(null);
@@ -609,6 +655,8 @@ export function ChatView({ chatId, title, icon, avatarUserId, community, topic, 
   return (
     <main
       className={`chat density-${density}`}
+      data-bg={bg ? '1' : undefined}
+      style={bg ? ({ '--chat-bg': `url("${bg.url.replace(/"/g, '%22')}")`, '--chat-bg-dim': bg.dim / 100, '--chat-bg-blur': `${bg.blur}px` } as CSSProperties) : undefined}
       onDragOver={(e) => {
         e.preventDefault();
         if (e.dataTransfer.types.includes('Files')) setDragOver(true);
@@ -660,6 +708,7 @@ export function ChatView({ chatId, title, icon, avatarUserId, community, topic, 
         </span>
         <div className="chat-head-tools">
           <WatchButton chatId={chatId} />
+          <IconButton icon="image" label="Фон этого чата" onClick={() => setBgOpen(true)} />
           {extraTools}
           {onCall && <IconButton icon="phone" label="Позвонить" onClick={() => onCall(false)} />}
           {onCall && <IconButton icon="video" label="Видеозвонок" onClick={() => onCall(true)} />}
@@ -746,7 +795,13 @@ export function ChatView({ chatId, title, icon, avatarUserId, community, topic, 
               : `Медленный режим: следующее сообщение через ${slowLeft} с`}
           </div>
         )}
-        {recording ? (
+        {frozen ? (
+          <div className="composer-readonly">
+            <Icon name="snow" size={16} /> Аккаунт заморожен администрацией Neon — читать можно, писать нельзя.
+          </div>
+        ) : readOnly ? (
+          <div className="composer-readonly">{readOnly}</div>
+        ) : recording ? (
           <div className="composer recording">
             <span className="rec-dot" />
             <RecTimer since={recording.startedAt} />
@@ -828,6 +883,20 @@ export function ChatView({ chatId, title, icon, avatarUserId, community, topic, 
         </div>
         )}
       </div>
+      {bgOpen && (
+        <Modal onClose={() => setBgOpen(false)} width={520} label="Фон этого чата" className="composer-modal">
+          <div className="modal-head">
+            <h2>Фон этого чата</h2>
+            <p className="muted small">Только для «{title}». Общий фон для всех чатов — в настройках → Внешний вид.</p>
+          </div>
+          <ChatBgSettings chatKey={chatId} />
+          <div className="modal-actions">
+            <button type="button" className="btn primary" onClick={() => setBgOpen(false)}>
+              Готово
+            </button>
+          </div>
+        </Modal>
+      )}
       {pollOpen && <PollComposer chatId={chatId} onClose={() => setPollOpen(false)} />}
       {roundOpen && <RoundRecorder chatId={chatId} onClose={() => setRoundOpen(false)} />}
       {forwarding && <ForwardModal msg={forwarding} onClose={() => setForwarding(null)} />}

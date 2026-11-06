@@ -78,7 +78,7 @@ function Friends() {
         {tab === 'add' ? (
           <div className="pad-l">
             <h2 className="h2">Добавить в друзья</h2>
-            <p className="muted">{ONLINE ? 'Введи логин друга — его видно в профиле под ником. Новые люди ни у кого не появляются сами: только по заявке' : 'Друзей можно добавлять в онлайн-режиме, когда войдёшь через почту'}</p>
+            <p className="muted">{ONLINE ? 'Введи логин или ID друга — их видно в его профиле. Новые люди ни у кого не появляются сами: только по заявке' : 'Друзей можно добавлять в онлайн-режиме, когда войдёшь через почту'}</p>
             <form
               className="add-friend"
               onSubmit={async (e) => {
@@ -88,7 +88,7 @@ function Friends() {
                 setResult(await actions.addFriendByName(add));
               }}
             >
-              <input className="input" aria-label="Логин друга" placeholder="Логин, например diadon" value={add} onChange={(e) => setAdd(e.target.value)} />
+              <input className="input" aria-label="Логин друга" placeholder="Логин или ID, например diadon" value={add} onChange={(e) => setAdd(e.target.value)} />
               <button type="submit" className="btn primary">
                 Отправить заявку
               </button>

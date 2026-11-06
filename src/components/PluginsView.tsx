@@ -499,7 +499,7 @@ function Catalog({ onPick }: { onPick: (code: string, file: string, catalogId: s
   return (
     <div className="plug-pane">
       <h2>Каталог</h2>
-      <p className="muted">Плагины и темы от других людей в Fizion. Перед установкой видно, что плагин сможет делать. Свой плагин можно опубликовать из его карточки.</p>
+      <p className="muted">Плагины и темы от других людей в Neon. Перед установкой видно, что плагин сможет делать. Свой плагин можно опубликовать из его карточки.</p>
       <div className="row gap-s wrap">
         <label className="search grow">
           <Icon name="search" size={16} />

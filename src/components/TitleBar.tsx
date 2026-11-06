@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { Mascot } from './Mascot';
+import { navOrder } from './SettingsMore';
+import { useState, type ReactElement } from 'react';
 import { ME } from '../data';
 import { Icon, type IconName } from '../icons';
 import { IS_DESKTOP_APP, isNarrow } from '../lib/platform';
@@ -97,13 +99,18 @@ function MeMenu() {
 
 function Nav() {
   const view = useStore((s) => s.ui.view);
+  const prefs = useStore((s) => s.settings.ui);
   const { unread } = useInbox();
+  // разделы можно спрятать и переставить в настройках → Интерфейс
+  const tabs: Record<string, ReactElement> = {
+    feed: <NavTab key="feed" icon="film" label="Лента" on={view === 'feed'} onClick={actions.openFeed} />,
+    chats: <NavTab key="chats" icon="bubble" label="Чаты" on={view === 'home' || view === 'server'} onClick={openChats} />,
+    inbox: <NavTab key="inbox" icon="inbox" label="Входящие" on={view === 'inbox'} count={unread} onClick={actions.openInbox} />,
+    plugins: <NavTab key="plugins" icon="puzzle" label="Плагины" on={view === 'plugins'} onClick={actions.openPlugins} />,
+  };
   return (
     <nav className="nav" aria-label="Разделы">
-      <NavTab icon="film" label="Лента" on={view === 'feed'} onClick={actions.openFeed} />
-      <NavTab icon="bubble" label="Чаты" on={view === 'home' || view === 'server'} onClick={openChats} />
-      <NavTab icon="inbox" label="Входящие" on={view === 'inbox'} count={unread} onClick={actions.openInbox} />
-      <NavTab icon="puzzle" label="Плагины" on={view === 'plugins'} onClick={actions.openPlugins} />
+      {navOrder(prefs).map((k) => tabs[k])}
     </nav>
   );
 }
@@ -113,8 +120,8 @@ export function TitleBar() {
   return (
     <div className="titlebar" data-tauri-drag-region>
       <div className="titlebar-name" data-tauri-drag-region>
-        <span className="brand-mark">F</span>
-        Fizion
+        <Mascot size={22} mood="still" badge />
+        Neon
       </div>
       {inside ? <Nav /> : <span />}
       <div className="titlebar-right" data-tauri-drag-region>

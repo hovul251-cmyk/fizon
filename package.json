@@ -1,0 +1,49 @@
+{
+  "name": "fizion",
+  "private": true,
+  "version": "0.10.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "app": "tauri dev",
+    "release": "tauri build",
+    "setup": "node --env-file=.env.setup scripts/setup-appwrite.mjs",
+    "build:web": "vite build --mode web",
+    "preview:web": "vite preview --mode web --outDir dist-web --host",
+    "web:deploy": "node --env-file=.env.setup scripts/deploy-web.mjs",
+    "github:setup": "node scripts/updater-setup.mjs",
+    "updater:setup": "node scripts/updater-setup.mjs",
+    "push": "node scripts/push.mjs",
+    "android:init": "tauri android init && node scripts/android-patch.mjs",
+    "android:dev": "tauri android dev",
+    "android:build": "tauri android build --apk",
+    "check:voice": "node --env-file=.env.setup scripts/check-livekit.mjs"
+  },
+  "dependencies": {
+    "appwrite": "^29.0.0",
+    "livekit-client": "^2.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "@tauri-apps/api": "^2.1.0",
+    "@tauri-apps/plugin-autostart": "^2.0.0",
+    "@tauri-apps/plugin-process": "^2.0.0",
+    "@tauri-apps/plugin-updater": "^2.0.0",
+    "@tauri-apps/plugin-opener": "^2.2.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.6.0",
+    "vite": "^7.0.0",
+    "node-appwrite": "^31.0.0",
+    "@types/node": "^22.10.0",
+    "livekit-server-sdk": "^2.6.0",
+    "node-forge": "^1.3.1"
+  }
+}

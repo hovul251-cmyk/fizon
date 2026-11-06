@@ -1,0 +1,11 @@
+{
+  "name": "fizion-api",
+  "version": "0.9.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.js",
+  "dependencies": {
+    "livekit-server-sdk": "^2.6.0",
+    "node-appwrite": "^31.0.0"
+  }
+}

@@ -1,0 +1,194 @@
+# Fizion: каждый push в main → новая версия.
+#  1. Номер версии считается сам: 0.9.<номер сборки> (первые две цифры берутся из package.json).
+#  2. Собирается установщик для Windows и выкладывается в GitHub Releases вместе с latest.json —
+#     приложения у всех видят «Вышла новая версия» и кнопку «Обновить».
+#  3. Если добавлен секрет APPWRITE_API_KEY — веб-версия тоже выкладывается на Appwrite Sites,
+#     и открытые вкладки предлагают обновиться.
+#  4. Android-сборка (Fizion.apk) пока выключена — см. закомментированный блок android в конце файла.
+# Чтобы отправить код без выпуска версии, допиши в сообщение коммита [skip release].
+name: Release
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# если запушил несколько раз подряд — собирается только последний
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  version:
+    if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          base=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          echo "version=$base.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    env:
+      FIZION_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Номер версии
+        run: node scripts/set-version.mjs ${{ env.FIZION_VERSION }}
+
+      - name: Настройки приложения
+        shell: bash
+        run: |
+          echo "VITE_APPWRITE_ENDPOINT=${{ secrets.VITE_APPWRITE_ENDPOINT }}" > .env
+          echo "VITE_APPWRITE_PROJECT_ID=${{ secrets.VITE_APPWRITE_PROJECT_ID }}" >> .env
+          echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY }}" >> .env
+          echo "VITE_HOOKS_URL=${{ secrets.VITE_HOOKS_URL }}" >> .env
+          echo "VITE_GITHUB_REPO=${{ github.repository }}" >> .env
+
+      - run: npm install
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v${{ env.FIZION_VERSION }}
+          releaseName: Fizion ${{ env.FIZION_VERSION }}
+          releaseBody: ${{ github.event.head_commit.message || 'Новая версия Fizion' }}
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+
+  web:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      FIZION_VERSION: ${{ needs.version.outputs.version }}
+      FIZION_NOTES: ${{ github.event.head_commit.message }}
+      APPWRITE_ENDPOINT: ${{ secrets.VITE_APPWRITE_ENDPOINT }}
+      APPWRITE_PROJECT_ID: ${{ secrets.VITE_APPWRITE_PROJECT_ID }}
+      APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ env.APPWRITE_API_KEY != '' }}
+
+      - uses: actions/setup-node@v4
+        if: ${{ env.APPWRITE_API_KEY != '' }}
+        with:
+          node-version: 22
+
+      - name: Выложить веб-версию
+        if: ${{ env.APPWRITE_API_KEY != '' }}
+        run: |
+          echo "VITE_APPWRITE_ENDPOINT=${{ secrets.VITE_APPWRITE_ENDPOINT }}" > .env
+          echo "VITE_APPWRITE_PROJECT_ID=${{ secrets.VITE_APPWRITE_PROJECT_ID }}" >> .env
+          echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY }}" >> .env
+          echo "VITE_HOOKS_URL=${{ secrets.VITE_HOOKS_URL }}" >> .env
+          node scripts/set-version.mjs "$FIZION_VERSION"
+          npm install
+          node scripts/deploy-web.mjs
+
+      - name: Веб-версия не настроена
+        if: ${{ env.APPWRITE_API_KEY == '' }}
+        run: echo "Секрета APPWRITE_API_KEY нет — веб-версия не выкладывается, только приложение для Windows."
+
+  # ---------------------------------------------------------------------
+  # Android временно выключен (им занимается отдельно другой разработчик).
+  # Чтобы включить: уберите «# » в начале строк ниже.
+  # ---------------------------------------------------------------------
+#   android:
+#     # ждём Windows: он создаёт релиз, к которому прикладываем APK
+#     needs: [version, windows]
+#     runs-on: ubuntu-latest
+#     env:
+#       FIZION_VERSION: ${{ needs.version.outputs.version }}
+#       HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+#       NDK_VERSION: 27.2.12479018
+#     steps:
+#       - name: Ключ Android не добавлен
+#         if: ${{ env.HAS_KEY != 'true' }}
+#         run: echo "Секрета ANDROID_KEYSTORE_B64 нет — APK не собирается. Выполни npm run github:setup."
+#
+#       - uses: actions/checkout@v4
+#         if: ${{ env.HAS_KEY == 'true' }}
+#
+#       - uses: actions/setup-node@v4
+#         if: ${{ env.HAS_KEY == 'true' }}
+#         with:
+#           node-version: 22
+#
+#       - uses: actions/setup-java@v4
+#         if: ${{ env.HAS_KEY == 'true' }}
+#         with:
+#           distribution: temurin
+#           java-version: 17
+#
+#       - uses: android-actions/setup-android@v3
+#         if: ${{ env.HAS_KEY == 'true' }}
+#
+#       - name: Android NDK
+#         if: ${{ env.HAS_KEY == 'true' }}
+#         run: sdkmanager "ndk;${NDK_VERSION}" "build-tools;34.0.0" "platforms;android-34"
+#
+#       - uses: dtolnay/rust-toolchain@stable
+#         if: ${{ env.HAS_KEY == 'true' }}
+#         with:
+#           targets: aarch64-linux-android,armv7-linux-androideabi
+#
+#       - uses: swatinem/rust-cache@v2
+#         if: ${{ env.HAS_KEY == 'true' }}
+#         with:
+#           workspaces: src-tauri
+#
+#       - name: Сборка APK
+#         if: ${{ env.HAS_KEY == 'true' }}
+#         env:
+#           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+#         run: |
+#           node scripts/set-version.mjs "$FIZION_VERSION"
+#           echo "VITE_APPWRITE_ENDPOINT=${{ secrets.VITE_APPWRITE_ENDPOINT }}" > .env
+#           echo "VITE_APPWRITE_PROJECT_ID=${{ secrets.VITE_APPWRITE_PROJECT_ID }}" >> .env
+#           echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY }}" >> .env
+#           echo "VITE_HOOKS_URL=${{ secrets.VITE_HOOKS_URL }}" >> .env
+#           echo "VITE_GITHUB_REPO=${{ github.repository }}" >> .env
+#           npm install
+#           npx tauri android init --ci
+#           node scripts/android-patch.mjs
+#           npx tauri android build --apk --ci --target aarch64 --target armv7
+#
+#       - name: Подпись и загрузка в релиз
+#         if: ${{ env.HAS_KEY == 'true' }}
+#         env:
+#           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#           KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+#           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+#         run: |
+#           apk=$(find src-tauri/gen/android/app/build/outputs/apk -name '*release*.apk' | head -n 1)
+#           echo "Собран: $apk"
+#           echo "$KS_B64" | base64 -d > fizion.p12
+#           bt="$ANDROID_HOME/build-tools/34.0.0"
+#           "$bt/zipalign" -p -f 4 "$apk" aligned.apk
+#           "$bt/apksigner" sign --ks fizion.p12 --ks-type PKCS12 --ks-pass env:KS_PASS --ks-key-alias fizion --out Fizion.apk aligned.apk
+#           "$bt/apksigner" verify Fizion.apk
+#           rm -f fizion.p12
+#           gh release upload "v${FIZION_VERSION}" Fizion.apk --clobber

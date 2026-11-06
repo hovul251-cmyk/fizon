@@ -1,0 +1,11 @@
+{
+  "name": "fizion-events",
+  "version": "0.9.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.js",
+  "dependencies": {
+    "node-appwrite": "^31.0.0",
+    "web-push": "^3.6.7"
+  }
+}

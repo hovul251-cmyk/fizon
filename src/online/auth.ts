@@ -1,4 +1,4 @@
-// Вход по номеру телефона (код по SMS), облачный пароль, устройства и сеансы.
+// Вход по номеру телефона (код по SMS) или по почте (код в письме / пароль), облачный пароль, устройства и сеансы.
 // Сессию приложение получает только из одноразового токена сервера — так облачный пароль нельзя обойти.
 
 import { ID } from 'appwrite';
@@ -58,7 +58,36 @@ export async function verifyPhoneCode(code: string): Promise<{ error: string | n
   }
 }
 
-/** Старые аккаунты: вход по почте и паролю (через сервер — из-за облачного пароля) */
+/* ---------- вход по почте ---------- */
+
+let emailUserId = '';
+
+export const normEmail = (s: string) => s.trim().toLowerCase();
+export const isEmail = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normEmail(s));
+
+/** Отправить код на почту. Аккаунта с такой почтой нет — Appwrite создаст его сам. */
+export async function sendEmailCode(email: string): Promise<string | null> {
+  if (!isEmail(email)) return 'Проверь адрес почты — кажется, в нём ошибка';
+  try {
+    await dropSession();
+    emailUserId = (await api().account.createEmailToken({ userId: ID.unique(), email: normEmail(email) })).userId;
+    return null;
+  } catch (e) {
+    return errorText(e);
+  }
+}
+
+/** Проверить код из письма. Сервер проверяет его так же, как код из SMS (действие phone-login принимает любой одноразовый код). */
+export async function verifyEmailCode(code: string): Promise<{ error: string | null; next?: 'done' | 'password' }> {
+  try {
+    const r = await call<Step>('phone-login', { userId: emailUserId, secret: code.replace(/\s/g, '') });
+    return { error: null, next: await finish(r) };
+  } catch (e) {
+    return { error: errorText(e) };
+  }
+}
+
+/** Вход по почте и паролю (через сервер — из-за облачного пароля) */
 export async function emailLogin(email: string, password: string): Promise<{ error: string | null; next?: 'done' | 'password' }> {
   try {
     const r = await call<Step>('email-login', { email: email.trim().toLowerCase(), password });
@@ -125,6 +154,25 @@ export async function confirmRecoveryEmail(code: string) {
   const me = await api().account.get();
   return wrap(() => api().account.updateEmailVerificationOTP({ userId: me.$id, secret: code.replace(/\s/g, '') }));
 }
+
+/* ---------- почта и пароль для входа ---------- */
+
+export interface LoginInfo {
+  email: string;
+  hasPassword: boolean;
+}
+
+export async function loginInfo(): Promise<LoginInfo> {
+  const me = await api().account.get();
+  return { email: me.email ?? '', hasPassword: !!me.passwordUpdate };
+}
+
+/** Задать или сменить пароль для входа. Текущий нужен, только если пароль уже был. */
+export const changeLoginPassword = (password: string, current?: string) =>
+  wrap(() => api().account.updatePassword(current ? { password, oldPassword: current } : { password }));
+
+/** Привязать почту для входа (или сменить её) — Appwrite требует пароль от аккаунта */
+export const changeLoginEmail = (email: string, password: string) => wrap(() => api().account.updateEmail({ email: normEmail(email), password }));
 
 /* ---------- телефон ---------- */
 

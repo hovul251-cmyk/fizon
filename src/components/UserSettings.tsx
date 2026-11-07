@@ -14,14 +14,16 @@ import { ChatBgSettings } from './ChatBg';
 import { InterfaceSettings, SecuritySettings, SoundSettings, VoiceSettings } from './SettingsMore';
 import { WalletSettings } from './Wallet';
 import { AdminPanel } from './Admin';
+import { PermissionSettings } from './Permissions';
 import type { IconName } from '../icons';
 
-type Tab = 'account' | 'look' | 'ui' | 'voice' | 'sounds' | 'notify' | 'privacy' | 'security' | 'wallet' | 'admin' | null;
+type Tab = 'account' | 'look' | 'ui' | 'voice' | 'perms' | 'sounds' | 'notify' | 'privacy' | 'security' | 'wallet' | 'admin' | null;
 const TITLES: Record<NonNullable<Tab>, string> = {
   account: 'Мой аккаунт',
   look: 'Внешний вид',
   ui: 'Интерфейс',
   voice: 'Голос и видео',
+  perms: 'Разрешения',
   sounds: 'Звуки',
   notify: 'Уведомления',
   privacy: 'Шифрование',
@@ -40,8 +42,10 @@ const themes: [Settings['theme'], string, string, string][] = [
 const accents = ['#5865F2', '#2F8CFF', '#23A55A', '#EB459E', '#F0B232', '#22D3EE', '#9B59B6', '#F23F43'];
 
 export function UserSettings() {
-  const [tab, setTabRaw] = useState<Tab>(() => (window.innerWidth <= 760 ? null : 'look'));
-  const [openedOnMobile, setOpened] = useState(false);
+  // настройки можно открыть сразу на нужном разделе: setUi({ modal: { kind: 'userSettings', tab: 'perms' } })
+  const startTab = useStore((s) => (s.ui.modal?.kind === 'userSettings' ? s.ui.modal.tab : undefined)) as Tab | undefined;
+  const [tab, setTabRaw] = useState<Tab>(() => startTab ?? (window.innerWidth <= 760 ? null : 'look'));
+  const [openedOnMobile, setOpened] = useState(!!startTab);
   const settings = useStore((s) => s.settings);
   const profile = useStore((s) => s.profile);
   const me = usePerson(ME)!;
@@ -87,6 +91,7 @@ export function UserSettings() {
         {item('look', 'Внешний вид', 'image')}
         {item('ui', 'Интерфейс', 'layout')}
         {item('voice', 'Голос и видео', 'mic')}
+        {item('perms', 'Разрешения', 'hand')}
         {item('sounds', 'Звуки', 'bell')}
         {item('notify', IS_DESKTOP_APP ? 'Уведомления и обновления' : 'Уведомления', 'inbox')}
         {item('privacy', 'Шифрование', 'shield')}
@@ -250,6 +255,7 @@ export function UserSettings() {
           </>
         )}
         {tab === 'voice' && <VoiceSettings />}
+        {tab === 'perms' && <PermissionSettings />}
         {tab === 'notify' && <NotifySettings />}
         {tab === 'privacy' && <PrivacySettings />}
         {tab === 'security' && <SecuritySettings />}

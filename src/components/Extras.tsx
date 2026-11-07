@@ -328,7 +328,14 @@ export function RoundRecorder({ chatId, onClose }: { chatId: string; onClose: ()
   return (
     <Modal onClose={() => stop(false)} width={380} label="Кружочек" className="round-modal">
       <div className={`round-cam ${state === 'recording' ? 'rec' : ''}`}>
-        {state === 'error' ? <div className="round-error">Нет доступа к камере — разреши её в настройках системы</div> : <video ref={video} autoPlay playsInline muted />}
+        {state === 'error' ? (
+          <div className="round-error">
+            Нет доступа к камере или микрофону
+            <button type="button" className="btn small" onClick={() => setUi({ modal: { kind: 'userSettings', tab: 'perms' } })}>
+              Открыть «Разрешения»
+            </button>
+          </div>
+        ) : <video ref={video} autoPlay playsInline muted />}
         {state === 'recording' && (
           <svg className="round-ring" viewBox="0 0 100 100" aria-hidden="true">
             <circle cx="50" cy="50" r="48" pathLength={ROUND_MAX} strokeDasharray={`${sec} ${ROUND_MAX}`} />

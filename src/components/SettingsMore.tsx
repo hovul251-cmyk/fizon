@@ -508,7 +508,7 @@ function CloudPassword() {
           <input className="input" type="password" autoComplete="new-password" aria-label="Повтори пароль" placeholder="Повтори пароль" value={pw2} onChange={(e) => setPw2(e.target.value)} />
           <input className="input" aria-label="Подсказка" placeholder="Подсказка (видна при входе, не пиши сам пароль)" maxLength={60} value={hint} onChange={(e) => setHint(e.target.value)} />
           <input className="input" type="email" aria-label="Почта для сброса" placeholder={st?.email ? `Почта для сброса: ${st.email}` : 'Почта для сброса пароля'} value={email} onChange={(e) => setEmail(e.target.value)} />
-          <span className="muted small">Почта нужна только чтобы сбросить облачный пароль, если забудешь. Вход по почте больше не используется.</span>
+          <span className="muted small">Эта почта нужна только чтобы сбросить облачный пароль, если забудешь. Облачный пароль спрашивается после кода или пароля для входа.</span>
           <div className="row gap-s">
             <button type="button" className="btn ghost" onClick={() => setMode('view')}>
               Отмена
@@ -519,6 +519,124 @@ function CloudPassword() {
               </button>
             )}
             <button type="submit" className="btn primary" disabled={busy || pw.length < 6}>
+              {busy ? 'Сохраняю…' : 'Сохранить'}
+            </button>
+          </div>
+        </form>
+      )}
+      {error && <p className="form-error">{error}</p>}
+    </div>
+  );
+}
+
+/** Почта и пароль, с которыми можно войти на любом устройстве. Пароль меняется тут же. */
+function LoginPassword() {
+  const [info, setInfo] = useState<auth.LoginInfo | null>(null);
+  const [mode, setMode] = useState<'view' | 'password' | 'email'>('view');
+  const [cur, setCur] = useState('');
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const load = () => auth.loginInfo().then(setInfo, (e) => setError((e as Error).message));
+  useEffect(() => void load(), []);
+  if (!ONLINE) return null;
+  const reset = (m: typeof mode = 'view') => {
+    setMode(m);
+    setCur('');
+    setPw('');
+    setPw2('');
+    setEmail('');
+    setError('');
+  };
+  const done = (text: string) => {
+    reset();
+    void load();
+    setUi({ toast: { text, id: Date.now() } });
+  };
+  const has = !!info?.hasPassword;
+  const status = !info ? 'Загружаю…' : `${info.email ? `Почта: ${info.email}` : 'Почта не привязана'} · ${has ? 'пароль задан' : 'пароля нет — входишь по коду'}`;
+  return (
+    <div className="cloud-pw">
+      <div className="list-row">
+        <Icon name="mail" size={20} />
+        <span className="grow">
+          <b>Почта и пароль для входа</b>
+          <span className="muted small block">{status}</span>
+        </span>
+      </div>
+      {mode === 'view' && info && (
+        <div className="row gap-s wrap">
+          <button type="button" className="btn small" onClick={() => reset('password')}>
+            <Icon name="key" size={14} /> {has ? 'Сменить пароль' : 'Задать пароль'}
+          </button>
+          <button type="button" className="btn small ghost" onClick={() => reset('email')}>
+            <Icon name="mail" size={14} /> {info.email ? 'Сменить почту' : 'Привязать почту'}
+          </button>
+        </div>
+      )}
+      {mode === 'password' && (
+        <form
+          className="ed-col"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (pw.length < 8) return setError('Пароль — минимум 8 символов');
+            if (pw !== pw2) return setError('Пароли не совпадают');
+            setBusy(true);
+            setError('');
+            const err = await auth.changeLoginPassword(pw, has ? cur : undefined);
+            setBusy(false);
+            if (err) return setError(/password|пароль/i.test(err) && has ? 'Текущий пароль неверный' : err);
+            done(has ? 'Пароль изменён' : 'Пароль задан');
+          }}
+        >
+          {has && <input className="input" type="password" autoComplete="current-password" aria-label="Текущий пароль" placeholder="Текущий пароль" value={cur} onChange={(e) => setCur(e.target.value)} />}
+          <input className="input" type="password" autoComplete="new-password" aria-label="Новый пароль" placeholder="Новый пароль (от 8 символов)" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <input className="input" type="password" autoComplete="new-password" aria-label="Повтори пароль" placeholder="Повтори новый пароль" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+          {has && <span className="muted small">Забыл текущий пароль? Выйди и войди по коду на почту или по SMS — тогда старый пароль не понадобится для входа.</span>}
+          <div className="row gap-s">
+            <button type="button" className="btn ghost" onClick={() => reset()}>
+              Отмена
+            </button>
+            <button type="submit" className="btn primary" disabled={busy || pw.length < 8 || (has && !cur)}>
+              {busy ? 'Сохраняю…' : 'Сохранить'}
+            </button>
+          </div>
+        </form>
+      )}
+      {mode === 'email' && (
+        <form
+          className="ed-col"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!auth.isEmail(email)) return setError('Проверь адрес почты — кажется, в нём ошибка');
+            if (!has && pw !== pw2) return setError('Пароли не совпадают');
+            setBusy(true);
+            setError('');
+            // без пароля Appwrite почту не меняет — сначала задаём пароль
+            let err = has ? null : await auth.changeLoginPassword(pw);
+            if (!err) err = await auth.changeLoginEmail(email, has ? cur : pw);
+            setBusy(false);
+            if (err) return setError(/409|already|exists|уже/i.test(err) ? 'Эта почта уже привязана к другому аккаунту' : err);
+            done('Почта для входа сохранена');
+          }}
+        >
+          <input className="input" type="email" autoComplete="email" aria-label="Почта" placeholder="Новая почта" value={email} onChange={(e) => setEmail(e.target.value)} />
+          {has ? (
+            <input className="input" type="password" autoComplete="current-password" aria-label="Пароль для входа" placeholder="Пароль для входа" value={cur} onChange={(e) => setCur(e.target.value)} />
+          ) : (
+            <>
+              <span className="muted small">Заодно придумай пароль — с ним можно входить по почте без кода.</span>
+              <input className="input" type="password" autoComplete="new-password" aria-label="Пароль" placeholder="Пароль (от 8 символов)" value={pw} onChange={(e) => setPw(e.target.value)} />
+              <input className="input" type="password" autoComplete="new-password" aria-label="Повтори пароль" placeholder="Повтори пароль" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+            </>
+          )}
+          <div className="row gap-s">
+            <button type="button" className="btn ghost" onClick={() => reset()}>
+              Отмена
+            </button>
+            <button type="submit" className="btn primary" disabled={busy || !email || (has ? !cur : pw.length < 8)}>
               {busy ? 'Сохраняю…' : 'Сохранить'}
             </button>
           </div>
@@ -573,7 +691,7 @@ function PhoneRow() {
           }}
         >
           <input className="input" type="tel" aria-label="Номер телефона" placeholder="+375 29 123 45 67" value={num} onChange={(e) => setNum(e.target.value)} />
-          <input className="input" type="password" aria-label="Пароль от аккаунта" placeholder="Пароль от аккаунта (которым входил по почте)" value={pass} onChange={(e) => setPass(e.target.value)} />
+          <input className="input" type="password" aria-label="Пароль от аккаунта" placeholder="Пароль для входа (задаётся ниже, в «Почта и пароль»)" value={pass} onChange={(e) => setPass(e.target.value)} />
           <button type="submit" className="btn primary">
             Получить код
           </button>
@@ -628,6 +746,7 @@ export function SecuritySettings() {
         </div>
       )}
       <PhoneRow />
+      <LoginPassword />
       <CloudPassword />
       <div className="field">УСТРОЙСТВА, С КОТОРЫХ ВЫПОЛНЕН ВХОД</div>
       <Sessions />

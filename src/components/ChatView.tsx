@@ -2,6 +2,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExt
 import { ME } from '../data';
 import { Icon, type IconName } from '../icons';
 import { startRecording, type Recording } from '../lib/recorder';
+import { deniedText, isPermissionError } from '../lib/permissions';
 import { isTouch } from '../lib/platform';
 import * as host from '../plugins/host';
 import { actions, setUi, useStore } from '../store';
@@ -582,8 +583,8 @@ export function ChatView({ chatId, title, icon, avatarUserId, community, topic, 
   const record = async () => {
     try {
       setRecording(await startRecording());
-    } catch {
-      setUi({ toast: { text: 'Нет доступа к микрофону — разреши его в настройках Windows', id: Date.now() } });
+    } catch (e) {
+      setUi({ toast: { text: isPermissionError(e) ? deniedText('microphone') : 'Не удалось включить микрофон — проверь, что он подключён', id: Date.now() } });
     }
   };
   const finishRecording = async (send: boolean) => {

@@ -7196,3 +7196,30 @@ span.gift-cell { cursor: default; }
   .settings-screen .admin-user { flex-direction: column; }
 }
 .tree-sec { flex-wrap: wrap; row-gap: 4px; }
+
+/* ===== 0.12: вход по почте, разрешения, адаптация ===== */
+.login-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg3); }
+.login-tabs button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.login-tabs button.on { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+.login-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.perm-row { display: flex; flex-direction: column; gap: 8px; }
+.perm-ico { width: 40px; height: 40px; flex: none; border-radius: 10px; background: var(--bg3); display: grid; place-items: center; color: var(--muted); }
+.perm-ico.ok { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
+.perm-ok { color: var(--green); flex: none; }
+.perm-help { margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--bg3); font-size: 13px; line-height: 1.45; display: flex; flex-direction: column; gap: 10px; }
+.perm-help p { margin: 0; }
+.perm-help.warn { border: 1px solid color-mix(in srgb, var(--red) 45%, transparent); background: color-mix(in srgb, var(--red) 10%, var(--bg2)); }
+.round-error { gap: 12px; text-align: center; }
+
+/* телефоны: крупные кнопки, поля без авто-зума iOS, отступы под вырез экрана */
+@media (max-width: 760px) {
+  .login-tabs button { min-height: 44px; }
+  .perm-row .list-row { flex-wrap: wrap; }
+  .perm-row .list-row > .btn { min-height: 40px; }
+  .cloud-pw .row.gap-s > .btn { flex: 1 1 auto; min-height: 40px; }
+  input.input, select.input, textarea.input { font-size: 16px; }
+}
+@media (hover: none) {
+  .btn.small { min-height: 36px; }
+}

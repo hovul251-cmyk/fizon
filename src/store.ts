@@ -21,7 +21,7 @@ export type Modal =
   | { kind: 'createServer' }
   | { kind: 'invite' }
   | { kind: 'serverSettings' }
-  | { kind: 'userSettings' }
+  | { kind: 'userSettings'; tab?: string }
   | { kind: 'storyComposer' }
   | { kind: 'reelComposer' }
   | { kind: 'newGroup' }

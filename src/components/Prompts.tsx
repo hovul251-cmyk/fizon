@@ -1,9 +1,9 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Icon, type IconName } from '../icons';
 import { askNotifyPermission, canNotify, notifyPermission } from '../lib/notify';
-import { IS_DESKTOP_APP } from '../lib/platform';
+import { IS_DESKTOP_APP, isTouch } from '../lib/platform';
 import { checkForUpdate, setFoundUpdate, type Update } from '../lib/updates';
-import { useStore } from '../store';
+import { setUi, useStore } from '../store';
 import { Mascot } from './Mascot';
 
 // Окна-вопросы по центру экрана: «Разрешить уведомления?», «Дать управление?», проверка обновлений при запуске.
@@ -95,6 +95,18 @@ export function useNotifyPrompt() {
         localStorage.setItem(ASKED_KEY, '1');
       } catch {
         /* ничего */
+      }
+      // телефоны разрешают доступ только по нажатию, поэтому все разрешения — кнопками в Настройки → Разрешения
+      if (isTouch()) {
+        const go = await askPermission({
+          icon: 'shield',
+          title: 'Разреши микрофон и уведомления',
+          text: 'Для звонков, голосовых и уведомлений открой Настройки → Разрешения и нажми «Разрешить» у каждого пункта.',
+          yes: 'Открыть разрешения',
+          no: 'Потом',
+        });
+        if (go) setUi({ modal: { kind: 'userSettings', tab: 'perms' } });
+        return;
       }
       const ok = await askPermission({
         icon: 'bell',

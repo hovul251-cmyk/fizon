@@ -24,7 +24,7 @@ function Hero() {
       </div>
       <ul className="hero-points">
         <li>
-          <Icon name="phone" size={18} /> Вход по номеру телефона, номер скрыт от всех
+          <Icon name="phone" size={18} /> Вход по номеру телефона или почте — их никто не увидит
         </li>
         <li>
           <Icon name="key" size={18} /> Облачный пароль и список устройств — как в Telegram
@@ -56,11 +56,31 @@ function CodeInput({ value, onChange, label = 'Код' }: { value: string; onCha
   );
 }
 
-type Step = 'phone' | 'code' | 'password' | 'reset' | 'email';
+type Step = 'phone' | 'email' | 'emailpw' | 'code' | 'password' | 'reset';
+type Channel = 'phone' | 'email';
 
-/** Вход как в Telegram: номер → код из SMS → (облачный пароль, если включён). Почта — только для старых аккаунтов. */
+/** Переключатель «Телефон / Почта» над формой входа */
+function MethodTabs({ value, onChange }: { value: Channel; onChange: (c: Channel) => void }) {
+  return (
+    <div className="login-tabs" role="tablist" aria-label="Способ входа">
+      {(
+        [
+          ['phone', 'phone', 'Телефон'],
+          ['email', 'mail', 'Почта'],
+        ] as const
+      ).map(([id, icon, label]) => (
+        <button key={id} type="button" role="tab" aria-selected={value === id} className={value === id ? 'on' : ''} onClick={() => onChange(id)}>
+          <Icon name={icon} size={16} /> {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Вход: номер или почта → код (SMS или письмо) → облачный пароль, если включён. Можно войти и по почте с паролем. */
 export function Login() {
   const [step, setStep] = useState<Step>('phone');
+  const [channel, setChannel] = useState<Channel>('phone');
   const [phone, setPhone] = useState('+');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -97,10 +117,16 @@ export function Login() {
     }
     await sync.start();
   };
-  const sendCode = () =>
+  const go = (s: Step) => {
+    setStep(s);
+    setError('');
+  };
+  const pickChannel = (c: Channel) => go(c === 'phone' ? 'phone' : 'email');
+  const sendCode = (via: Channel = channel) =>
     run(async () => {
-      const err = await auth.sendPhoneCode(phone);
+      const err = via === 'phone' ? await auth.sendPhoneCode(phone) : await auth.sendEmailCode(email);
       if (err) return setError(err);
+      setChannel(via);
       setCode('');
       setStep('code');
       setCooldown(60);
@@ -115,13 +141,14 @@ export function Login() {
             className="login-form"
             onSubmit={(e) => {
               e.preventDefault();
-              void sendCode();
+              void sendCode('phone');
             }}
           >
             <div>
               <h2>Вход в Neon</h2>
               <p className="muted">Введи номер телефона — пришлём код по SMS. Аккаунта нет — создадим.</p>
             </div>
+            <MethodTabs value="phone" onChange={pickChannel} />
             <label className="field">
               НОМЕР ТЕЛЕФОНА
               <input className="input phone-input" type="tel" required autoFocus value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s()-]/g, ''))} placeholder="+375 29 123 45 67" autoComplete="tel" />
@@ -131,9 +158,34 @@ export function Login() {
             <button type="submit" className="btn primary big" disabled={busy || phone.replace(/\D/g, '').length < 8}>
               {busy ? 'Отправляю…' : 'Получить код'}
             </button>
+          </form>
+        )}
+
+        {step === 'email' && (
+          <form
+            className="login-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void sendCode('email');
+            }}
+          >
+            <div>
+              <h2>Вход в Neon</h2>
+              <p className="muted">Введи почту — пришлём код в письме. Аккаунта нет — создадим.</p>
+            </div>
+            <MethodTabs value="email" onChange={pickChannel} />
+            <label className="field">
+              ПОЧТА
+              <input className="input" type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@mail.com" autoComplete="email" inputMode="email" />
+            </label>
+            <span className="muted small">Почту никто не увидит — она скрыта от всех.</span>
+            {error && <p className="form-error">{error}</p>}
+            <button type="submit" className="btn primary big" disabled={busy || !auth.isEmail(email)}>
+              {busy ? 'Отправляю…' : 'Получить код'}
+            </button>
             <div className="login-links">
-              <button type="button" className="link" onClick={() => { setStep('email'); setError(''); }}>
-                У меня старый аккаунт по почте
+              <button type="button" className="link" onClick={() => { setPassword(''); go('emailpw'); }}>
+                Войти с паролем
               </button>
             </div>
           </form>
@@ -145,29 +197,37 @@ export function Login() {
             onSubmit={(e) => {
               e.preventDefault();
               void run(async () => {
-                const r = await auth.verifyPhoneCode(code);
+                const r = channel === 'phone' ? await auth.verifyPhoneCode(code) : await auth.verifyEmailCode(code);
                 if (r.error) return setError(r.error);
                 await after(r.next);
               });
             }}
           >
             <div className="mail-icon">
-              <Icon name="phone" size={28} />
+              <Icon name={channel === 'phone' ? 'phone' : 'mail'} size={28} />
             </div>
             <div>
-              <h2>Код из SMS</h2>
+              <h2>{channel === 'phone' ? 'Код из SMS' : 'Код из письма'}</h2>
               <p className="muted">
-                Отправили код на <b className="text">{auth.normPhone(phone)}</b>. SMS может прийти через минуту.
+                {channel === 'phone' ? (
+                  <>
+                    Отправили код на <b className="text">{auth.normPhone(phone)}</b>. SMS может прийти через минуту.
+                  </>
+                ) : (
+                  <>
+                    Отправили письмо на <b className="text">{auth.normEmail(email)}</b>. Не видно — загляни в «Спам».
+                  </>
+                )}
               </p>
             </div>
-            <CodeInput value={code} onChange={setCode} label="Код из SMS" />
+            <CodeInput value={code} onChange={setCode} label={channel === 'phone' ? 'Код из SMS' : 'Код из письма'} />
             {error && <p className="form-error">{error}</p>}
             <button type="submit" className="btn primary big" disabled={busy || code.length < 6}>
               {busy ? 'Проверяю…' : 'Войти'}
             </button>
             <div className="login-links">
-              <button type="button" className="link" onClick={() => { setStep('phone'); setError(''); }}>
-                Другой номер
+              <button type="button" className="link" onClick={() => go(channel)}>
+                {channel === 'phone' ? 'Другой номер' : 'Другая почта'}
               </button>
               <button type="button" className="link" disabled={cooldown > 0 || busy} onClick={() => void sendCode()}>
                 {cooldown > 0 ? `Отправить ещё раз через ${cooldown} с` : 'Отправить код ещё раз'}
@@ -251,7 +311,7 @@ export function Login() {
           </form>
         )}
 
-        {step === 'email' && (
+        {step === 'emailpw' && (
           <form
             className="login-form"
             onSubmit={(e) => {
@@ -264,8 +324,8 @@ export function Login() {
             }}
           >
             <div>
-              <h2>Старый аккаунт</h2>
-              <p className="muted">Войди почтой и паролем, а потом привяжи номер в Настройки → Конфиденциальность — дальше будешь входить по номеру.</p>
+              <h2>Вход по паролю</h2>
+              <p className="muted">Почта и пароль от аккаунта. Пароль задаётся и меняется в Настройки → Конфиденциальность.</p>
             </div>
             <label className="field">
               ПОЧТА
@@ -280,8 +340,11 @@ export function Login() {
               {busy ? 'Секунду…' : 'Войти'}
             </button>
             <div className="login-links">
-              <button type="button" className="link" onClick={() => { setStep('phone'); setError(''); }}>
-                Войти по номеру
+              <button type="button" className="link" disabled={busy || !auth.isEmail(email)} onClick={() => void sendCode('email')}>
+                Забыл пароль — войти по коду на почту
+              </button>
+              <button type="button" className="link" onClick={() => go('email')}>
+                Назад
               </button>
             </div>
           </form>
@@ -317,7 +380,7 @@ function OfflineLogin() {
           <button type="submit" className="btn primary big">
             Продолжить без аккаунта
           </button>
-          <p className="note">Чтобы включить вход по почте, выполни шаги из README → «Настройка онлайн-режима».</p>
+          <p className="note">Чтобы включить вход по номеру и почте, выполни шаги из README → «Настройка онлайн-режима».</p>
         </form>
       </section>
     </div>

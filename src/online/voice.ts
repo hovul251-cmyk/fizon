@@ -5,6 +5,7 @@ import { ExternalE2EEKeyProvider, Room, RoomEvent, Track, type Participant, type
 import { getState, setUi } from '../store';
 import type { VideoTrackLike } from '../types';
 import { call, errorText, L, toast, trackMe } from './sync';
+import { deniedText, isPermissionError } from '../lib/permissions';
 import * as social from './social';
 import { play } from '../lib/sound';
 import { onRemoteData, resetRemote } from './remotectl';
@@ -148,7 +149,7 @@ export async function connect(to: { roomId?: string; dmId?: string; groupId?: st
   try {
     await r.localParticipant.setMicrophoneEnabled(!muted);
   } catch (e) {
-    toast('Нет доступа к микрофону: ' + errorText(e));
+    toast(isPermissionError(e) ? deniedText('microphone') : 'Нет доступа к микрофону: ' + errorText(e));
     setUi({ muted: true });
   }
 }
@@ -168,7 +169,7 @@ export async function setMic(on: boolean) {
   try {
     await room?.localParticipant.setMicrophoneEnabled(on);
   } catch (e) {
-    toast(errorText(e));
+    toast(isPermissionError(e) ? deniedText('microphone') : errorText(e));
   }
 }
 
@@ -181,7 +182,7 @@ export async function setCamera(on: boolean) {
     await room?.localParticipant.setCameraEnabled(on);
     setUi({ camera: on });
   } catch (e) {
-    toast('Не удалось включить камеру: ' + errorText(e));
+    toast(isPermissionError(e) ? deniedText('camera') : 'Не удалось включить камеру: ' + errorText(e));
     setUi({ camera: false });
   }
   refreshVideos();
@@ -216,11 +217,11 @@ export async function applyAudioProcessing() {
   const on = r.localParticipant.isMicrophoneEnabled;
   if (!on) return;
   await r.localParticipant.setMicrophoneEnabled(false);
-  await r.localParticipant.setMicrophoneEnabled(true, captureOpts()).catch((e) => toast(errorText(e)));
+  await r.localParticipant.setMicrophoneEnabled(true, captureOpts()).catch((e) => toast(isPermissionError(e) ? deniedText('microphone') : errorText(e)));
 }
 
 /** Отправить данные участникам звонка (удалённое управление) */
 export async function sendData(data: Uint8Array, to?: string[], reliable = true) {
-  await room?.localParticipant.publishData(data, { reliable, destinationIdentities: to });
+  await room?.localParticipant.publishData(new Uint8Array(data), { reliable, destinationIdentities: to });
 }
 export const currentRoom = () => room;

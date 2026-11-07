@@ -4,7 +4,8 @@ import { pushSupported, subscribePush } from '../lib/push';
 import * as remote from '../online/remote';
 import { ME } from '../data';
 import { Icon } from '../icons';
-import { actions, useStore, type State } from '../store';
+import { actions, setUi, useStore, type State } from '../store';
+import { isTouch } from '../lib/platform';
 import type { Message } from '../types';
 import { Avatar, formatDay, formatTime, IconButton, usePerson } from './common';
 
@@ -128,6 +129,7 @@ function NotifyCard() {
         type="button"
         className="btn small primary"
         onClick={async () => {
+          if (isTouch()) return setUi({ modal: { kind: 'userSettings', tab: 'perms' } });
           setPerm(await askNotifyPermission());
           if (pushSupported() && notifyPermission() === 'granted') void subscribePush(remote.savePushSub);
         }}
